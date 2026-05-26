@@ -16,7 +16,7 @@
     "test:client": "pnpm --filter @galaga/client test",
     "preview": "pnpm --filter @galaga/client preview",
     "clean": "pnpm -r exec rm -rf dist node_modules pkg target",
-    "vercel-build": "pnpm --filter @galaga/client build"
+    "vercel-build": "bash scripts/vercel-build.sh"
   },
   "packageManager": "pnpm@11.0.6",
   "engines": {
