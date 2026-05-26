@@ -1,0 +1,28 @@
+# Node
+node_modules/
+.pnpm-store/
+dist/
+.vite/
+*.log
+.DS_Store
+.npmrc
+
+# Rust / wasm-pack
+target/
+Cargo.lock
+packages/engine/pkg/
+
+# Editor
+.vscode/
+.idea/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Vercel
+.vercel/
+
+# OS
+Thumbs.db

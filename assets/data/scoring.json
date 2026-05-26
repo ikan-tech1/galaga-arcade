@@ -1,0 +1,30 @@
+{
+  "$comment": "ROM-derived scoring table mirrored in packages/engine/src/scoring.rs",
+  "formation": {
+    "zako": 50,
+    "goei": 80,
+    "boss": 150,
+    "captured_fighter": 500
+  },
+  "diving": {
+    "zako": 100,
+    "goei": 160,
+    "boss_solo": 400,
+    "boss_with_1_wingman": 800,
+    "boss_with_2_wingmen": 1600,
+    "captured_fighter": 1000
+  },
+  "bonus_items": {
+    "scorpion_per_hit": 160,
+    "scorpion_set": 1000,
+    "spy_per_hit": 160,
+    "spy_set": 2000,
+    "flag_per_hit": 160,
+    "flag_set": 3000
+  },
+  "challenge": {
+    "wave_bonuses": [1000, 1500, 2000, 2500, 3000],
+    "perfect_bonus": 10000
+  },
+  "extra_fighter_thresholds_default": [20000, 90000, 160000, 230000, 300000]
+}
