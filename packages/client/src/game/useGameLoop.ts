@@ -17,6 +17,7 @@ import type { HiScoreEntry } from '@galaga/shared';
 interface UseGameLoopArgs {
   settings: { settings: Settings };
   hiscores: { list: HiScoreEntry[] };
+  caps?: { lowEnd: boolean; reducedMotion: boolean };
 }
 
 export interface GameApi {
@@ -25,8 +26,9 @@ export interface GameApi {
   reset(): void;
 }
 
-export function useGameLoop({ settings, hiscores }: UseGameLoopArgs) {
+export function useGameLoop({ settings, hiscores, caps }: UseGameLoopArgs) {
   const [frame, setFrame] = useState<FrameState | null>(null);
+  const [ready, setReady] = useState(false);
   const apiRef = useRef<GameApi>({
     startGame: () => undefined,
     submitHiScore: () => undefined,
@@ -113,6 +115,7 @@ export function useGameLoop({ settings, hiscores }: UseGameLoopArgs) {
       // Initial state.
       const first = tickEngine(0);
       setFrame(first);
+      setReady(true);
       startAttractMusic();
       lastPhase = first.phase;
       rafId = requestAnimationFrame(loop);
@@ -152,8 +155,9 @@ export function useGameLoop({ settings, hiscores }: UseGameLoopArgs) {
 
   // Suppress unused warning
   void hiscores;
+  void caps;
   void INPUT_FIRE;
   void INPUT_START;
 
-  return { frame, api: apiRef.current };
+  return { frame, ready, api: apiRef.current };
 }

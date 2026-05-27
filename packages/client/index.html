@@ -3,21 +3,201 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b0014" />
+    <link rel="apple-touch-icon" href="/icon-192.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#07000f" />
     <meta name="description" content="ROM-accurate Galaga arcade clone — recreated sprites, original assets, runs in your browser." />
     <meta property="og:title" content="Galaga — Arcade Clone" />
     <meta property="og:description" content="ROM-accurate Galaga, recreated from scratch for the web." />
     <meta property="og:type" content="website" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>GALAGA — Arcade Clone</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap"
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=block"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=block"
       rel="stylesheet"
     />
+
+    <style>
+      /* Pre-React loading screen — pixel-sharp, no React/WASM required.
+         This is the very first paint, before any JS executes. */
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #07000f;
+        overflow: hidden;
+      }
+      body {
+        font-family: 'Press Start 2P', ui-monospace, monospace;
+        color: #f5f3ff;
+        -webkit-font-smoothing: none;
+        -moz-osx-font-smoothing: grayscale;
+        font-smooth: never;
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at 50% 30%, rgba(124, 58, 237, 0.18), transparent 55%),
+          radial-gradient(circle at 50% 80%, rgba(34, 211, 238, 0.10), transparent 55%),
+          #07000f;
+        z-index: 9999;
+        transition: opacity 280ms ease-out;
+      }
+      #boot.gone { opacity: 0; pointer-events: none; }
+      .boot-stack {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 28px;
+        padding: 24px;
+      }
+      .boot-logo {
+        font-family: 'Press Start 2P', ui-monospace, monospace;
+        font-size: 40px;
+        line-height: 1;
+        letter-spacing: 8px;
+        color: #22d3ee;
+        text-shadow:
+          0 0 1px #22d3ee,
+          0 0 6px rgba(34, 211, 238, 0.55);
+        image-rendering: pixelated;
+        white-space: nowrap;
+      }
+      .boot-sub {
+        font-family: 'Press Start 2P', ui-monospace, monospace;
+        font-size: 10px;
+        letter-spacing: 6px;
+        color: #ff3aa6;
+        text-shadow:
+          0 0 1px #ff3aa6,
+          0 0 6px rgba(255, 58, 166, 0.55);
+      }
+      .boot-bar {
+        position: relative;
+        width: 240px;
+        height: 10px;
+        border: 2px solid #22d3ee;
+        background: #0c0118;
+        box-shadow:
+          0 0 1px #22d3ee,
+          0 0 8px rgba(34, 211, 238, 0.45),
+          inset 0 0 4px rgba(34, 211, 238, 0.18);
+        overflow: hidden;
+      }
+      .boot-bar__fill {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 0%;
+        background: repeating-linear-gradient(
+          90deg,
+          #22d3ee 0 6px,
+          #6aa2ff 6px 12px
+        );
+        animation: boot-fill 1.6s cubic-bezier(0.5, 0.1, 0.6, 1) forwards;
+      }
+      @keyframes boot-fill {
+        0%   { width: 0%; }
+        45%  { width: 62%; }
+        70%  { width: 78%; }
+        100% { width: 92%; }
+      }
+      .boot-loading {
+        font-family: 'Press Start 2P', ui-monospace, monospace;
+        font-size: 12px;
+        letter-spacing: 6px;
+        color: #ffd166;
+        text-shadow:
+          0 0 1px #ffd166,
+          0 0 6px rgba(255, 209, 102, 0.45);
+      }
+      .boot-loading::after {
+        content: '';
+        display: inline-block;
+        width: 1em;
+        text-align: left;
+        animation: boot-dots 1s steps(4, end) infinite;
+      }
+      @keyframes boot-dots {
+        0%   { content: ''; }
+        25%  { content: '.'; }
+        50%  { content: '..'; }
+        75%  { content: '...'; }
+        100% { content: ''; }
+      }
+      .boot-hint {
+        font-family: 'Press Start 2P', ui-monospace, monospace;
+        font-size: 8px;
+        letter-spacing: 4px;
+        color: #6b5d8e;
+      }
+      /* Small fighter ship pixel art (made with box-shadow) */
+      .boot-ship {
+        position: relative;
+        width: 16px;
+        height: 16px;
+        margin-bottom: 4px;
+      }
+      .boot-ship i {
+        position: absolute;
+        width: 2px;
+        height: 2px;
+        background: #f5f3ff;
+        box-shadow:
+          /* row 0 */
+          6px 0 0 #22d3ee, 8px 0 0 #22d3ee,
+          /* row 1 (y=2) */
+          6px 2px 0 #ffffff, 8px 2px 0 #ffffff,
+          /* row 2 (y=4) */
+          4px 4px 0 #22d3ee, 6px 4px 0 #22d3ee, 8px 4px 0 #22d3ee, 10px 4px 0 #22d3ee,
+          /* row 3 (y=6) */
+          2px 6px 0 #22d3ee, 4px 6px 0 #6aa2ff, 6px 6px 0 #ffffff, 8px 6px 0 #ffffff,
+          10px 6px 0 #6aa2ff, 12px 6px 0 #22d3ee,
+          /* row 4 (y=8) — wing strut */
+          0 8px 0 #22d3ee, 2px 8px 0 #22d3ee, 4px 8px 0 #6aa2ff, 6px 8px 0 #6aa2ff,
+          8px 8px 0 #6aa2ff, 10px 8px 0 #6aa2ff, 12px 8px 0 #22d3ee, 14px 8px 0 #22d3ee,
+          /* row 5 (y=10) */
+          0 10px 0 #1d4ed8, 2px 10px 0 #1d4ed8, 6px 10px 0 #ff3a3a,
+          8px 10px 0 #ff3a3a, 12px 10px 0 #1d4ed8, 14px 10px 0 #1d4ed8,
+          /* row 6 (y=12) */
+          6px 12px 0 #fbbf24, 8px 12px 0 #fbbf24,
+          /* row 7 (y=14) — thrust */
+          6px 14px 0 #ff3a3a, 8px 14px 0 #ff3a3a;
+        top: 0;
+        left: 0;
+        image-rendering: pixelated;
+      }
+    </style>
   </head>
   <body>
+    <div id="boot" aria-label="Loading">
+      <div class="boot-stack">
+        <div class="boot-ship" aria-hidden="true"><i></i></div>
+        <div class="boot-logo">GALAGA</div>
+        <div class="boot-sub">ARCADE CLONE</div>
+        <div class="boot-bar"><div class="boot-bar__fill"></div></div>
+        <div class="boot-loading">LOADING</div>
+        <div class="boot-hint">INSERT COIN TO PLAY</div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

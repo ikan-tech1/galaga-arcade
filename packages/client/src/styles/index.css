@@ -45,8 +45,15 @@ html, body, #root {
   background: var(--bg-deep);
   color: var(--ink);
   font-family: var(--pixel-font);
-  -webkit-font-smoothing: antialiased;
-  text-rendering: geometricPrecision;
+  /* Press Start 2P is a bitmap-style pixel font. Anti-aliasing softens its
+     designed-aliased edges. Disable smoothing globally; let canvas/SVG
+     handle their own rendering. */
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  font-smooth: never;
+  text-rendering: optimizeSpeed;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -76,12 +83,14 @@ body {
   background: var(--bg);
   border-radius: var(--radius-cab);
   overflow: hidden;
+  /* Tight neon glow — large blurs read as "fuzzy", so keep stroke crisp
+     and only allow a small halo. */
   box-shadow:
     0 0 0 2px var(--bezel-2),
     0 0 0 6px var(--bezel-1),
     0 0 0 8px #050007,
-    0 30px 60px -10px rgba(34, 211, 238, 0.25),
-    0 0 80px -20px rgba(255, 58, 166, 0.4);
+    0 12px 28px -8px rgba(34, 211, 238, 0.22),
+    0 0 32px -10px rgba(255, 58, 166, 0.30);
 }
 
 /* Subtle bezel light */
@@ -142,28 +151,47 @@ body {
 
 /* === Title / logo ======================================================= */
 
+/* Title logo — pixel font requires integer px sizes to stay sharp.
+   We pick from a stepped scale (no fractional vmin), and avoid any
+   transform that would force subpixel rasterisation. */
 .title-logo {
   font-family: var(--pixel-font);
-  font-size: clamp(24px, 6.6vmin, 56px);
-  letter-spacing: 0.1em;
+  font-size: 32px;
+  letter-spacing: 8px;
   color: var(--neon-cyan);
+  /* Crisp 1px outline + small halo. Larger blurs read as soft/fuzzy. */
   text-shadow:
-    0 0 4px #22d3ee,
-    0 0 16px rgba(34, 211, 238, 0.65),
-    0 0 32px rgba(255, 58, 166, 0.35);
-  transform: skew(-2deg, 0);
+    0 0 1px #22d3ee,
+    0 0 8px rgba(34, 211, 238, 0.55),
+    0 0 18px rgba(255, 58, 166, 0.22);
   text-align: center;
   line-height: 1;
+  margin: 0;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  font-smooth: never;
+  image-rendering: pixelated;
+}
+
+@media (min-width: 480px) {
+  .title-logo { font-size: 40px; letter-spacing: 10px; }
+}
+@media (min-width: 720px) {
+  .title-logo { font-size: 48px; letter-spacing: 12px; }
 }
 
 .title-logo__sub {
   display: block;
-  margin-top: 10px;
-  font-size: 0.35em;
-  letter-spacing: 0.4em;
+  margin-top: 12px;
+  font-family: var(--pixel-font);
+  font-size: 10px;
+  letter-spacing: 6px;
   color: var(--neon-mag);
-  text-shadow: var(--shadow-neon-mag);
-  transform: skew(0);
+  text-shadow:
+    0 0 1px #ff3aa6,
+    0 0 6px rgba(255, 58, 166, 0.55);
+  -webkit-font-smoothing: none;
+  font-smooth: never;
 }
 
 /* === Generic neon button ================================================ */
@@ -197,8 +225,10 @@ body {
   z-index: 3;
   font-family: var(--pixel-font);
   font-size: 9px;
-  letter-spacing: 0.1em;
+  letter-spacing: 1px;
   color: var(--ink);
+  -webkit-font-smoothing: none;
+  font-smooth: never;
 }
 
 .hud__top {
@@ -531,7 +561,133 @@ body {
 /* === Responsive small-screen tweaks ==================================== */
 
 @media (max-width: 360px) {
-  .title-logo { font-size: 10vmin; }
+  .title-logo { font-size: 24px; letter-spacing: 6px; }
+}
+
+/* === Loading / boot screen ============================================= */
+
+.loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(124, 58, 237, 0.20), transparent 55%),
+    radial-gradient(circle at 50% 80%, rgba(34, 211, 238, 0.12), transparent 55%),
+    var(--bg-deep);
+  z-index: 20;
+  pointer-events: auto;
+  font-family: var(--pixel-font);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  font-smooth: never;
+  transition: opacity 280ms ease-out;
+}
+.loading--leaving { opacity: 0; pointer-events: none; }
+
+.loading__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  padding: 24px;
+  max-width: 100%;
+}
+
+.loading__ship {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.45));
+}
+
+.loading__logo {
+  font-family: var(--pixel-font);
+  font-size: 28px;
+  letter-spacing: 8px;
+  color: var(--neon-cyan);
+  text-shadow:
+    0 0 1px #22d3ee,
+    0 0 8px rgba(34, 211, 238, 0.55);
+  line-height: 1;
+  margin: 0;
+}
+@media (min-width: 480px) {
+  .loading__logo { font-size: 36px; letter-spacing: 10px; }
+}
+
+.loading__sub {
+  font-family: var(--pixel-font);
+  font-size: 10px;
+  letter-spacing: 6px;
+  color: var(--neon-mag);
+  text-shadow:
+    0 0 1px #ff3aa6,
+    0 0 6px rgba(255, 58, 166, 0.55);
+}
+
+.loading__bar {
+  position: relative;
+  width: 220px;
+  max-width: 70vw;
+  height: 10px;
+  border: 2px solid var(--neon-cyan);
+  background: var(--bg-elev);
+  box-shadow:
+    0 0 1px var(--neon-cyan),
+    0 0 8px rgba(34, 211, 238, 0.45),
+    inset 0 0 4px rgba(34, 211, 238, 0.18);
+  overflow: hidden;
+}
+
+.loading__bar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--neon-cyan) 0 6px,
+    var(--neon-blue) 6px 12px
+  );
+  transition: width 180ms ease-out;
+}
+
+.loading__text {
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  letter-spacing: 6px;
+  color: var(--neon-gold);
+  text-shadow:
+    0 0 1px #ffd166,
+    0 0 6px rgba(255, 209, 102, 0.45);
+}
+
+.loading__text__dots {
+  display: inline-block;
+  width: 1em;
+  text-align: left;
+}
+
+.loading__hint {
+  font-family: var(--pixel-font);
+  font-size: 8px;
+  letter-spacing: 4px;
+  color: var(--ink-faint);
+  margin-top: 4px;
+}
+
+.loading__rule {
+  width: 240px;
+  max-width: 80vw;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0,
+    rgba(255, 58, 166, 0.6) 30%,
+    rgba(34, 211, 238, 0.6) 70%,
+    transparent 100%
+  );
+  margin-top: 6px;
 }
 
 /* === Accessibility =====================================================*/
