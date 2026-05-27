@@ -23,6 +23,7 @@ pub fn challenge_pattern(stage: u32) -> u8 {
 /// 26 difficulty ranks for stages 1..=22, then ROM plateaus.
 pub fn difficulty_rank(stage: u32) -> u8 {
     if stage == 0 {
+        // Stage 0 is the medium-difficulty quirk (rank 12).
         return 12;
     }
     if stage <= 22 {
@@ -126,5 +127,20 @@ mod tests {
         assert!(p1 > p10);
         assert!(p10 > p25);
         assert!(p25 >= 54);
+    }
+
+    #[test]
+    fn dive_shot_chance_caps_at_20() {
+        for s in 1..=255u32 {
+            let c = dive_shot_chance_256(s);
+            assert!(c >= 3 && c <= 20, "stage {s} chance {c}");
+        }
+    }
+
+    #[test]
+    fn max_concurrent_dives_grows_with_difficulty() {
+        assert!(max_concurrent_dives(1) <= max_concurrent_dives(10));
+        assert!(max_concurrent_dives(10) <= max_concurrent_dives(22));
+        assert_eq!(max_concurrent_dives(255), max_concurrent_dives(22));
     }
 }

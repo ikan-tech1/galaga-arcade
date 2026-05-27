@@ -79,8 +79,10 @@ const PAL_EXPLOSION: PaletteMap = {
   W: '#ffffff',
 };
 
-// 16x16 sprite ASCII templates
-// player ship (idle)
+// 16x16 sprite ASCII templates. Recreated from the arcade silhouette with
+// careful left/right mirror symmetry — all original work, no Namco pixels.
+
+// Player ship (idle).
 const PLAYER_ROWS = [
   '................',
   '................',
@@ -88,19 +90,19 @@ const PLAYER_ROWS = [
   '.......WW.......',
   '......WCCW......',
   '......WCCW......',
-  '......WCCW......',
   '.....WCYYCW.....',
   '.....WCYYCW.....',
-  '....WCBWWBCW....',
+  '....WCBYYBCW....',
   '...WCBBYYBBCW...',
+  '..WCBBYYYYBBCW..',
   '..WBBBYYYYBBBW..',
   '..WBB.YYYY.BBW..',
   '..WW...YY...WW..',
-  '...........R....',
+  '................',
   '................',
 ];
 
-// player thruster flicker (alt frame)
+// Player thruster flicker (alt frame) — same silhouette + thruster glow.
 const PLAYER_THRUST_ROWS = [
   '................',
   '................',
@@ -108,32 +110,32 @@ const PLAYER_THRUST_ROWS = [
   '.......WW.......',
   '......WCCW......',
   '......WCCW......',
-  '......WCCW......',
   '.....WCYYCW.....',
   '.....WCYYCW.....',
-  '....WCBWWBCW....',
+  '....WCBYYBCW....',
   '...WCBBYYBBCW...',
+  '..WCBBYYYYBBCW..',
   '..WBBBYYYYBBBW..',
   '..WBB.YYYY.BBW..',
   '..WW...YY...WW..',
-  '....R..YY..R....',
-  '....R...R..R....',
+  '....R...R...R...',
+  '....R...R...R...',
 ];
 
-// Zako (bee) — wings open
+// Zako (bee) — wings open / closed. Symmetric, blue body with white wings.
 const ZAKO_OPEN = [
   '................',
-  '................',
-  '..W..........W..',
-  '..WW........WW..',
-  '...WC......CW...',
-  '....WCC..CCW....',
-  '.....BCWWCB.....',
-  '....BBCBBCBB....',
-  '....BCCWWCCB....',
-  '....BCYWWYCB....',
-  '....BCYYYYCB....',
-  '....BCYWWYCB....',
+  '...W........W...',
+  '..WCW......WCW..',
+  '.WCCW......WCCW.',
+  '.WCWBW....WBWCW.',
+  '..WBBW....WBBW..',
+  '....BWWWWWWB....',
+  '...BBCBWWBCBB...',
+  '...BCCWBBWCCB...',
+  '...BCYWBBWYCB...',
+  '...BCYYBBYYCB...',
+  '...BCYWBBWYCB...',
   '....BCCWWCCB....',
   '.....BCWWCB.....',
   '......BWWB......',
@@ -145,8 +147,7 @@ const ZAKO_CLOSED = [
   '................',
   '....W......W....',
   '....WC....CW....',
-  '....WCC..CCW....',
-  '.....BCWWCB.....',
+  '....WCWWWWCW....',
   '....BBCBBCBB....',
   '....BCCWWCCB....',
   '....BCYWWYCB....',
@@ -156,26 +157,27 @@ const ZAKO_CLOSED = [
   '.....BCWWCB.....',
   '......BWWB......',
   '................',
+  '................',
 ];
 
-// Goei (butterfly) — wings open / closed
+// Goei (butterfly) — wings open / closed. Pink + purple, big swept wings.
 const GOEI_OPEN = [
-  '................',
   '..M............M',
   '..MM..........MM',
   '..MPM........MPM',
   '..MPPM......MPPM',
   '..MPCPM....MPCPM',
   '..MPCCPMMPMPCCPM',
-  '...MMPYBYPMMM...',
-  '....MMPBBYPMM...',
-  '......MPYBPM....',
-  '......MPYBPM....',
-  '.......MMMMM....',
-  '......MMM..MM...',
-  '.....MM......MM.',
-  '....MM........MM',
-  '...M............',
+  '...MMPCYYCPMMM..',
+  '....MMPYBYPMM...',
+  '.....MMPYBPMM...',
+  '......MMPBPM....',
+  '.......MPBPM....',
+  '.......MMBMM....',
+  '......MM.MMM....',
+  '.....MM....MM...',
+  '....MM......MM..',
+  '...M..........M.',
 ];
 const GOEI_CLOSED = [
   '................',
@@ -184,35 +186,35 @@ const GOEI_CLOSED = [
   '.....MM..MM.....',
   '....MPM..MPM....',
   '....MPPMMPPM....',
-  '....MPCBBCPM....',
-  '.....MMYBMM.....',
-  '....MMPBBPMM....',
-  '...MMPYBBYPMM...',
-  '..MMMPYBBYPMMM..',
-  '..MMM.YBBY.MMM..',
-  '..MM..YBBY..MM..',
-  '..M...MMMM...M..',
-  '......M..M......',
+  '....MPCWWCPM....',
+  '....MPCYBYCPM...',
+  '....MMPYBBYPMM..',
+  '...MMPYYBBYYPMM.',
+  '..MMMPYYBBYYPMM.',
+  '..MMM.YYBBYY.MM.',
+  '..MM...YBBY...M.',
+  '..M....MBBM.....',
+  '.......M..M.....',
   '................',
 ];
 
-// Boss Galaga — wings open / closed (green form)
+// Boss Galaga — wings open / closed (green form). Recognisable double-arc.
 const BOSS_OPEN = [
-  '................',
   '..G............G',
   '..GG..........GG',
   '..GDG........GDG',
   '..GDDG......GDDG',
   '..GDCDG....GDCDG',
-  '..GDDDDG..GDDDDG',
-  '...GGGDDGGDDGGG.',
-  '....GGCDDDDCGG..',
-  '.....GCWYYWCG...',
-  '.....GDYYYYDG...',
-  '.....GDDYYDDG...',
-  '.....GGDDDDGG...',
-  '......GG..GG....',
-  '......G....G....',
+  '..GDDCDG..GDCDDG',
+  '..GDDDDDGGDDDDDG',
+  '...GGGDDDDDDDGGG',
+  '....GGGCDDDDCGG.',
+  '.....GCWYYYWCG..',
+  '.....GDYYYYYDG..',
+  '.....GDDYYYDDG..',
+  '.....GGDDDDDGG..',
+  '......GG.D.GG...',
+  '......G..D..G...',
   '................',
 ];
 const BOSS_CLOSED = [
@@ -223,8 +225,8 @@ const BOSS_CLOSED = [
   '....GDCGGCDG....',
   '....GDDDDDDG....',
   '....GDDDDDDG....',
-  '....GGDDDDGG....',
-  '....GGCDDCGG....',
+  '...GGGDDDDGGG...',
+  '...GGCDDDDCGG...',
   '....GCWYYWCG....',
   '....GDYYYYDG....',
   '....GDDYYDDG....',
@@ -234,7 +236,7 @@ const BOSS_CLOSED = [
   '................',
 ];
 
-// Captured fighter (red player)
+// Captured fighter (red player) — silhouette matches the player ship.
 const CAPTURED_ROWS = [
   '................',
   '................',
@@ -242,13 +244,13 @@ const CAPTURED_ROWS = [
   '.......WW.......',
   '......WRRW......',
   '......WRRW......',
-  '......WRRW......',
   '.....WRYYRW.....',
   '.....WRYYRW.....',
-  '....WRBWWBRW....',
+  '....WRBYYBRW....',
   '...WRBBYYBBRW...',
-  '..WRRRYYYYRRRW..',
-  '..WRR.YYYY.RRW..',
+  '..WRBBYYYYBBRW..',
+  '..WBBBYYYYBBBW..',
+  '..WBB.YYYY.BBW..',
   '..WW...YY...WW..',
   '................',
   '................',

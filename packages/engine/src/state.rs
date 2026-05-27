@@ -23,6 +23,12 @@ use crate::stages::{
     attack_pattern_for, dive_period_frames, dive_shot_chance_256, is_challenge,
     max_concurrent_dives,
 };
+use crate::stages::bonus_triggers::bonus_drop_for_kill;
+use crate::stages::entry_paths::{bake_entry_waypoints, ENTRY_WAYPOINTS};
+use crate::stages::dive_paths::{
+    dive_path, dive_heading, sample_dive, BEAM_Y_TRIGGER,
+};
+use crate::demo_track;
 use crate::Inputs;
 
 // =====================================================================
@@ -179,7 +185,6 @@ pub struct World {
     pub score_pops: Vec<ScorePopActive>,
     pub last_fire_inputs: bool,
     pub last_start_inputs: bool,
-    pub pause_edge: bool,
     pub last_pause_inputs: bool,
     pub rng: XorShift32,
     pub dive_cooldown: u32,
@@ -190,7 +195,6 @@ pub struct World {
     pub challenge_spawn_cursor: u32,
     pub bonus_threshold_index: u32,
     pub extra_thresholds: Vec<u32>,
-    pub demo_input_phase: u32,
     pub hi_score_initials: [char; 3],
     pub hi_score_cursor: u8,
     pub pending_score_for_entry: u32,
@@ -198,6 +202,18 @@ pub struct World {
     pub captured_active: bool,
     pub captured_slot: Option<u8>,
     pub tractor_active: bool,
+    /// Number of formation enemies killed on the current stage. Drives the
+    /// ROM bonus-drop trigger table (`bonus_drop_for_kill`).
+    pub formation_kill_ordinal: u32,
+    /// Embedded attract-mode demo input track. The ROM ships a recorded
+    /// keystroke timeline; we step through it at frame cadence so the demo
+    /// looks like a deterministic playthrough rather than RNG drift.
+    pub demo_input_cursor: u32,
+    /// Score required to qualify for the hi-score table. The TS shell pushes
+    /// the 10th-place score from the persisted top-10 here so the engine's
+    /// `tick_game_over` logic accepts exactly the same scores the React app
+    /// will accept — replacing the legacy `score > hi_score / 4` heuristic.
+    pub hi_score_threshold: u32,
 }
 
 impl World {
@@ -219,7 +235,6 @@ impl World {
             score_pops: Vec::new(),
             last_fire_inputs: false,
             last_start_inputs: false,
-            pause_edge: false,
             last_pause_inputs: false,
             rng: XorShift32::new(0xCAFEBABE),
             dive_cooldown: 180,
@@ -230,7 +245,6 @@ impl World {
             challenge_spawn_cursor: 0,
             bonus_threshold_index: 0,
             extra_thresholds: vec![20_000, 90_000, 160_000, 230_000, 300_000],
-            demo_input_phase: 0,
             hi_score_initials: ['A', 'A', 'A'],
             hi_score_cursor: 0,
             pending_score_for_entry: 0,
@@ -238,6 +252,9 @@ impl World {
             captured_active: false,
             captured_slot: None,
             tractor_active: false,
+            formation_kill_ordinal: 0,
+            demo_input_cursor: 0,
+            hi_score_threshold: 7_000,
         };
         // Populate attract-mode formation so the demo screen has enemies.
         w.spawn_formation_for_stage(1);
@@ -347,30 +364,37 @@ impl World {
     fn tick_attract(&mut self, inputs: Inputs) {
         let start_edge = inputs.start && !self.last_start_inputs;
 
-        // Demo behaviour: enemies fly entries, light dives, but the demo
-        // player drifts and fires randomly so the canvas stays alive.
-        self.demo_input_phase = (self.demo_input_phase + 1) % 600;
-        let mut demo_inputs = Inputs::default();
-        let p = self.demo_input_phase;
-        demo_inputs.left = p > 200 && p < 320;
-        demo_inputs.right = p > 60 && p < 180 || p > 380 && p < 500;
-        demo_inputs.fire = (p % 33) < 4;
+        // Demo behaviour: replay the embedded ROM-style attract input
+        // recording. The arcade ROM ships a stored keystroke timeline that
+        // walks the demo through one full stage with predictable hits and
+        // dodges; we step through the same kind of timeline at frame
+        // cadence so the demo feels deterministic instead of RNG-driven.
+        let demo_inputs = demo_track::input_at(self.demo_input_cursor);
+        self.demo_input_cursor = self.demo_input_cursor.wrapping_add(1);
         self.player.tick(demo_inputs, self.frame);
         self.player_fire(demo_inputs);
         self.advance_bullets();
         self.tick_enemies();
+        // Light scripted dive launches so the formation actually attacks.
+        if !is_challenge(self.stage) {
+            self.tick_dive_launches();
+        }
         self.run_collisions(true);
         self.tick_explosions();
         self.tick_bonus_items();
         self.tick_score_pops();
+        self.last_fire_inputs = demo_inputs.fire;
 
         if start_edge {
             self.start_game();
         }
-        // Auto-cycle stage every ~12s of demo so attract has variety.
-        if self.phase_frames > 720 {
+        // Auto-cycle stage roughly every 16s of demo so attract has variety
+        // and respawn the formation cleanly between cycles.
+        if self.phase_frames > 960 {
             self.stage = (self.stage % 6) + 1;
             self.spawn_formation_for_stage(self.stage);
+            self.player.respawn();
+            self.demo_input_cursor = 0;
             self.phase_frames = 0;
         }
     }
@@ -456,8 +480,14 @@ impl World {
     fn tick_game_over(&mut self, _inputs: Inputs) {
         self.tick_explosions();
         if self.phase_frames >= GAME_OVER_FRAMES {
-            // Check if score qualifies for hi-score entry.
-            if self.score > self.hi_score / 4 && self.score > 0 {
+            // Score qualifies for hi-score entry iff it would land in the
+            // top-10. The TS shell mirrors `localStorage` 10th place into
+            // `hi_score_threshold`; the engine accepts any score strictly
+            // greater than that threshold (or any non-zero score when the
+            // table is empty / threshold is 0).
+            let qualifies = self.score > 0
+                && (self.hi_score_threshold == 0 || self.score > self.hi_score_threshold);
+            if qualifies {
                 self.pending_score_for_entry = self.score;
                 self.hi_score = self.hi_score.max(self.score);
                 self.hi_score_cursor = 0;
@@ -491,6 +521,9 @@ impl World {
         self.dive_cooldown = dive_period_frames(stage) + 60;
         self.captured_active = false;
         self.captured_slot = None;
+        // ROM bonus-drop trigger table is keyed off the per-stage formation
+        // kill ordinal, so reset it whenever a new stage begins.
+        self.formation_kill_ordinal = 0;
         if is_challenge(stage) {
             self.challenge_hits = 0;
             self.challenge_total = 40;
@@ -513,39 +546,20 @@ impl World {
     }
 
     fn bake_entry_path(&mut self, e: &mut Enemy, slot: u8) {
+        // ROM-derived entry choreography. Every slot is assigned one of four
+        // canonical entry groups (`SLOT_GROUP[slot]`); we bake the absolute
+        // waypoint list for that group fused onto the formation home, with a
+        // small per-slot phase offset so adjacent slots don't fly identical
+        // lines on top of each other.
         let (hx, hy) = home_pos(slot);
-        // Entry strategy: come from top-left, top-right, or bottom alternating
-        // by slot parity, swoop through a control point, end at home.
-        let dir = slot % 4;
-        let (sx, sy, cx, cy) = match dir {
-            0 => (-16i32, 80i32, SCREEN_W / 2 - 40, 40),
-            1 => (SCREEN_W + 16, 80, SCREEN_W / 2 + 40, 40),
-            2 => (-16, 220, 40, 150),
-            _ => (SCREEN_W + 16, 220, SCREEN_W - 40, 150),
-        };
-
-        // Sample 16 waypoints along a cubic Bezier from (sx,sy) → home via two
-        // control points (cx,cy) and slight extra curl.
-        let p0 = (sx as f32, sy as f32);
-        let p3 = (hx as f32 + 8.0, hy as f32 + 8.0);
-        let p1 = (cx as f32, cy as f32);
-        let p2 = (
-            (hx + (slot as i32 - 20) * 2) as f32,
-            (hy as f32 - 30.0).max(20.0),
-        );
-        e.waypoint_count = 16;
-        for i in 0..16 {
-            let t = i as f32 / 15.0;
-            let omt = 1.0 - t;
-            let bx = omt.powi(3) * p0.0
-                + 3.0 * omt.powi(2) * t * p1.0
-                + 3.0 * omt * t * t * p2.0
-                + t.powi(3) * p3.0;
-            let by = omt.powi(3) * p0.1
-                + 3.0 * omt.powi(2) * t * p1.1
-                + 3.0 * omt * t * t * p2.1
-                + t.powi(3) * p3.1;
-            e.waypoints[i] = (bx as i16, by as i16);
+        let baked = bake_entry_waypoints(slot, hx, hy);
+        e.waypoint_count = ENTRY_WAYPOINTS as u8;
+        for i in 0..ENTRY_WAYPOINTS {
+            e.waypoints[i] = baked[i];
+        }
+        // Pad any remainder so the renderer never reads stale values.
+        for i in ENTRY_WAYPOINTS..e.waypoints.len() {
+            e.waypoints[i] = baked[ENTRY_WAYPOINTS - 1];
         }
     }
 
@@ -728,94 +742,48 @@ impl World {
     }
 
     fn tick_dive_one(e: &mut Enemy, player_x: i32, player_y: i32) {
-        // Procedural dive: arc, loop, swoop, vertical, diagonal, kamikaze
-        // chosen by `e.path_id`.
-        let t = e.path_t;
-        e.path_t += e.path_speed.max(0.012);
-        let speed = 1.7 + (e.path_id as f32 % 4.0) * 0.25;
-        let kind_offset = (e.path_id as f32 * 0.7).sin();
-        match e.path_id % 13 {
-            0 | 1 => {
-                // swoop left/right
-                let dir = if e.path_id == 0 { -1.0 } else { 1.0 };
-                let arc_x = (t * 6.0).sin() * 60.0 * dir;
-                let arc_y = t * 220.0;
-                e.x = e.home_x + arc_x as i32 - 40;
-                e.y = e.home_y + arc_y as i32;
+        // ROM-transcribed dive scripts. Each `path_id` indexes into the
+        // 16-entry `DIVE_PATTERNS` master table; sample the relative-to-home
+        // offset at the current `path_t` and fuse it onto `home_x/home_y`.
+        let path = dive_path(e.path_id);
+        e.path_t += e.path_speed.max(0.008);
+        let t = e.path_t.min(0.9999);
+        let (mut dx_rel, dy_rel) = sample_dive(path, t);
+        // Pattern 11 (Diagonal Dive) is stored as left-biased; flip sign at
+        // runtime when the player is to the right of `home_x` so the dive
+        // tracks toward the actual player.
+        if e.path_id == 11 {
+            if player_x > e.home_x {
+                dx_rel = -dx_rel;
             }
-            2 => {
-                // spiral dive
-                let r = 10.0 + t * 80.0;
-                let theta = t * 12.0;
-                e.x = e.home_x + (theta.cos() * r) as i32;
-                e.y = e.home_y + 30 + (theta.sin() * r * 0.5) as i32 + (t * 160.0) as i32;
-            }
-            3 => {
-                // loop dive
-                let theta = t * 8.0;
-                let dive_y = t * 200.0;
-                e.x = e.home_x + (theta.sin() * 50.0) as i32;
-                e.y = e.home_y + 20 + dive_y as i32 + (theta.cos() * 24.0) as i32;
-            }
-            4 | 5 => {
-                // boss capture path — slow descent until apex height ~ player
-                let dir = if e.path_id == 4 { -1.0 } else { 1.0 };
-                let arc_x = (t * 4.0).sin() * 80.0 * dir;
-                let arc_y = t * 160.0;
-                e.x = e.home_x + arc_x as i32;
-                e.y = e.home_y + arc_y as i32;
-                // Trigger BeamingDown when close to player_y.
-                if e.kind == EnemyKind::Boss && e.y > player_y - 90 && e.beam_frames == 0
-                    && !e.injured
-                {
-                    e.phase = EnemyPhase::BeamingDown;
-                    e.beam_frames = TRACTOR_BEAM_FRAMES;
-                    e.y = player_y - 80;
-                }
-            }
-            6 | 7 => {
-                // wingman escort — track a sine wave, slight bias toward player_x
-                let dir = if e.path_id == 6 { -1.0 } else { 1.0 };
-                let sx = (t * 5.0).sin() * 30.0 * dir;
-                let bias = ((player_x - e.home_x) as f32 * 0.5 * t).clamp(-60.0, 60.0);
-                e.x = e.home_x + sx as i32 + bias as i32;
-                e.y = e.home_y + (t * 230.0) as i32;
-            }
-            8 => {
-                // double swoop
-                let arc_x = (t * 9.0).sin() * 70.0;
-                let arc_y = t * 210.0;
-                e.x = e.home_x + arc_x as i32;
-                e.y = e.home_y + arc_y as i32;
-            }
-            9 => {
-                // figure eight
-                let theta = t * 6.5;
-                e.x = e.home_x + (theta.sin() * 50.0) as i32;
-                e.y = e.home_y + 40 + (((theta * 2.0).sin()) * 30.0) as i32 + (t * 150.0) as i32;
-            }
-            10 => {
-                // vertical dive
-                e.x = e.home_x + (kind_offset * 4.0) as i32;
-                e.y = e.home_y + (t * 250.0) as i32;
-            }
-            11 => {
-                // diagonal dive — toward player
-                let dx = (player_x - e.home_x) as f32;
-                let dy = 250.0;
-                e.x = e.home_x + (dx * t) as i32;
-                e.y = e.home_y + (dy * t) as i32;
-            }
-            _ => {
-                // kamikaze — fast toward player
-                let dx = (player_x - e.home_x) as f32;
-                let dy = (player_y - e.home_y) as f32;
-                let mag = (dx * dx + dy * dy).sqrt().max(1.0);
-                let _ = speed;
-                e.x = e.home_x + (dx * t) as i32;
-                e.y = e.home_y + (dy * t) as i32;
-                e.angle_deg = (dy / mag).atan2(dx / mag).to_degrees() + 90.0;
-            }
+        }
+        // Patterns 6/7 (wingman escort) bias horizontally toward the player
+        // while still following the ROM curve — ROM does this via segment
+        // adjustments; we emulate with a bounded lerp.
+        let bias = if matches!(e.path_id, 6 | 7) {
+            let bx = ((player_x - e.home_x) as f32 * 0.45 * t).clamp(-48.0, 48.0);
+            bx as i32
+        } else {
+            0
+        };
+        e.x = e.home_x + dx_rel + bias;
+        e.y = e.home_y + dy_rel;
+        e.angle_deg = dive_heading(path, t);
+        // Boss capture trigger — when the boss reaches `BEAM_Y_TRIGGER`
+        // measured relative to its home the ROM hands off to the tractor
+        // beam state. The check uses `dy_rel` (path-relative) so the trigger
+        // position matches the original sweep, regardless of formation row.
+        if matches!(e.path_id, 4 | 5)
+            && e.kind == EnemyKind::Boss
+            && !e.injured
+            && e.beam_frames == 0
+            && dy_rel >= BEAM_Y_TRIGGER
+            && e.y >= player_y - 110
+        {
+            e.phase = EnemyPhase::BeamingDown;
+            e.beam_frames = TRACTOR_BEAM_FRAMES;
+            // Lift slightly above the player so the cone is visible.
+            e.y = (player_y - 80).max(40);
         }
     }
 
@@ -857,8 +825,8 @@ impl World {
         self.enemies[pick].path_id = pattern;
         self.enemies[pick].path_speed = 0.012 + 0.0005 * (stages_difficulty(stage) as f32);
         let pos = (self.enemies[pick].x, self.enemies[pick].y);
-        // Boss diving: probabilistically bring wingmen, and bring the captured
-        // fighter along if one is docked in formation (enabling the rescue).
+        // Boss diving: bring wingmen, and bring the captured fighter along
+        // if one is docked in formation (enabling the rescue).
         if self.enemies[pick].kind == EnemyKind::Boss {
             let boss_slot = slot;
             let boss_home_y = self.enemies[pick].home_y;
@@ -876,8 +844,12 @@ impl World {
                 .map(|(i, _)| i)
                 .take(2)
                 .collect();
-            let count = wingmen.len() as u8;
-            self.enemies[pick].escort_count = count;
+            let mut escort_slots = [u8::MAX; 2];
+            for (i, &idx) in wingmen.iter().enumerate() {
+                escort_slots[i] = self.enemies[idx].slot;
+            }
+            self.enemies[pick].escort_count = wingmen.len() as u8;
+            self.enemies[pick].escort_slots = escort_slots;
             for (i, idx) in wingmen.into_iter().enumerate() {
                 self.enemies[idx].phase = EnemyPhase::Diving;
                 self.enemies[idx].path_t = 0.0;
@@ -886,6 +858,7 @@ impl World {
             }
             // If a captured fighter is in this boss's escort slot range,
             // drag it along — this is the rescue opportunity.
+            self.enemies[pick].carrying_capture = false;
             if self.captured_active {
                 let cap_idx = self.enemies.iter().enumerate().find_map(|(i, e)| {
                     if e.kind == EnemyKind::CapturedFighter
@@ -906,6 +879,7 @@ impl World {
                         // Tag boss as carrying captured fighter (used by rescue).
                         self.enemies[pick].captured_slot =
                             Some(self.enemies[cap].slot);
+                        self.enemies[pick].carrying_capture = true;
                     }
                 }
             }
@@ -980,74 +954,140 @@ impl World {
     // ----------------------------------------------------------------
 
     fn run_collisions(&mut self, attract: bool) {
-        // Player bullets vs enemies.
-        // hit tuple: (enemy_idx, x, y, score_value, was_boss_with_captured)
-        let mut hits: Vec<(usize, i32, i32, u32, bool, EnemyKind)> = Vec::new();
-        for b in self.player_bullets.iter_mut() {
+        // Player bullets vs enemies. We collect the bullet-hit candidates as
+        // (bullet_index, enemy_index) pairs first, then resolve scoring with
+        // a borrow-friendly second pass so we can read sibling state (alive
+        // wingmen, etc.) at the moment of the kill.
+        struct Hit {
+            x: i32,
+            y: i32,
+            value: u32,
+            carried_capture: bool,
+            killed_kind: EnemyKind,
+            killed_was_formation: bool,
+        }
+        let mut hit_candidates: Vec<(usize, usize)> = Vec::new();
+        for (b_i, b) in self.player_bullets.iter().enumerate() {
             if !b.alive {
                 continue;
             }
-            for (idx, e) in self.enemies.iter_mut().enumerate() {
-                if e.phase == EnemyPhase::Dying {
-                    continue;
-                }
-                if !e.alive {
+            for (idx, e) in self.enemies.iter().enumerate() {
+                if e.phase == EnemyPhase::Dying || !e.alive {
                     continue;
                 }
                 if aabb(b.x, b.y, BULLET_W, BULLET_H, e.x, e.y, ENEMY_W, ENEMY_H) {
-                    b.alive = false;
-                    let diving = matches!(e.phase, EnemyPhase::Diving | EnemyPhase::BeamingDown);
-                    if e.kind == EnemyKind::Boss && !e.injured {
-                        e.injured = true;
-                        let pos_x = e.x;
-                        let pos_y = e.y;
-                        hits.push((idx, pos_x, pos_y, 0, false, e.kind));
-                        break;
-                    }
-                    let score = if e.kind == EnemyKind::Boss && diving {
-                        boss_escort_score(e.escort_count)
-                    } else {
-                        score_for(e.kind.id(), diving)
-                    };
-                    let carried_capture =
-                        e.kind == EnemyKind::Boss && e.captured_slot.is_some();
-                    let killed_kind = e.kind;
-                    e.alive = false;
-                    e.phase = EnemyPhase::Dying;
-                    e.explode_frames_left = ENEMY_EXPLODE_FRAMES;
-                    let pos_x = e.x;
-                    let pos_y = e.y;
-                    hits.push((idx, pos_x, pos_y, score, carried_capture, killed_kind));
+                    hit_candidates.push((b_i, idx));
                     break;
                 }
             }
         }
+        let mut hits: Vec<Hit> = Vec::new();
+        // Mark bullets dead and resolve enemy state.
+        for (b_i, idx) in hit_candidates {
+            // Bullet might already have been consumed by an earlier hit in
+            // the same frame; skip if so.
+            if !self.player_bullets[b_i].alive {
+                continue;
+            }
+            self.player_bullets[b_i].alive = false;
+            // Read side info *before* mutating the enemy.
+            let kind = self.enemies[idx].kind;
+            let injured_before = self.enemies[idx].injured;
+            let diving = matches!(
+                self.enemies[idx].phase,
+                EnemyPhase::Diving | EnemyPhase::BeamingDown
+            );
+            let was_formation = self.enemies[idx].phase == EnemyPhase::InFormation;
+            if kind == EnemyKind::Boss && !injured_before {
+                // First boss hit just injures (palette swap).
+                self.enemies[idx].injured = true;
+                let x = self.enemies[idx].x;
+                let y = self.enemies[idx].y;
+                hits.push(Hit {
+                    x,
+                    y,
+                    value: 0,
+                    carried_capture: false,
+                    killed_kind: kind,
+                    killed_was_formation: false,
+                });
+                continue;
+            }
+            // Compute boss + escort score from *currently alive* wingmen
+            // (not the dive-start escort_count). This matches the ROM rule
+            // where a boss whose wingmen die en route scores 400, with one
+            // wingman 800, with both 1600.
+            let value = if kind == EnemyKind::Boss && diving {
+                let escort_slots = self.enemies[idx].escort_slots;
+                let alive = escort_slots
+                    .iter()
+                    .filter(|&&s| {
+                        s != u8::MAX
+                            && self.enemies.iter().any(|e2| {
+                                e2.slot == s
+                                    && e2.kind == EnemyKind::Goei
+                                    && e2.alive
+                                    && e2.phase != EnemyPhase::Dying
+                            })
+                    })
+                    .count() as u8;
+                boss_escort_score(alive)
+            } else {
+                score_for(kind.id(), diving)
+            };
+            let carried_capture =
+                kind == EnemyKind::Boss && self.enemies[idx].carrying_capture;
+            let x = self.enemies[idx].x;
+            let y = self.enemies[idx].y;
+            self.enemies[idx].alive = false;
+            self.enemies[idx].phase = EnemyPhase::Dying;
+            self.enemies[idx].explode_frames_left = ENEMY_EXPLODE_FRAMES;
+            hits.push(Hit {
+                x,
+                y,
+                value,
+                carried_capture,
+                killed_kind: kind,
+                killed_was_formation: was_formation,
+            });
+        }
         self.player_bullets.retain(|b| b.alive);
-        for (_idx, x, y, value, carried_capture, killed_kind) in hits {
-            if value > 0 {
-                self.add_score(value);
-                self.push_score_pop(x, y, value);
+        for h in hits {
+            if h.value > 0 {
+                self.add_score(h.value);
+                self.push_score_pop(h.x, h.y, h.value);
                 if is_challenge(self.stage) {
                     self.challenge_hits += 1;
                 }
             }
             // Boss that was carrying captured fighter on its dive → rescue!
-            if carried_capture {
+            if h.carried_capture {
                 self.try_rescue_captured();
             }
-            // Bonus item drop: small chance after a non-challenge kill.
-            if !is_challenge(self.stage) && value > 0 {
-                self.maybe_spawn_bonus_item(x, y, killed_kind);
+            // Bonus item drop: ROM-style ordinal trigger. Every kill that
+            // started in formation increments the ordinal counter; the
+            // bonus_drop_for_kill table tells us which ordinals (per stage)
+            // drop scorpion / spy / flag.
+            if !is_challenge(self.stage) && h.value > 0 && h.killed_was_formation {
+                self.formation_kill_ordinal =
+                    self.formation_kill_ordinal.saturating_add(1);
+                if let Some(kind) =
+                    bonus_drop_for_kill(self.stage, self.formation_kill_ordinal)
+                {
+                    self.spawn_bonus_item(h.x, h.y, kind);
+                }
             }
+            // Captured-fighter drops never spawn bonus items either.
+            let _ = h.killed_kind;
             self.explosions.push(ExplosionSprite {
-                x,
-                y,
+                x: h.x,
+                y: h.y,
                 frames_left: ENEMY_EXPLODE_FRAMES,
                 total_frames: ENEMY_EXPLODE_FRAMES,
                 big: false,
             });
-            self.push_audio("explosion_small", x, y);
-            self.push_particle("explosion", x + 8, y + 8, 14, 1);
+            self.push_audio("explosion_small", h.x, h.y);
+            self.push_particle("explosion", h.x + 8, h.y + 8, 14, 1);
         }
         if attract {
             return;
@@ -1237,31 +1277,15 @@ impl World {
         }
     }
 
-    fn maybe_spawn_bonus_item(&mut self, x: i32, y: i32, kind: EnemyKind) {
-        // Spawn rate: kind-weighted; bosses drop more often than zako.
-        let chance = match kind {
-            EnemyKind::Boss => 24u32,
-            EnemyKind::Goei => 10u32,
-            EnemyKind::Zako => 6u32,
-            EnemyKind::CapturedFighter => 0u32,
-        };
-        if chance == 0 || (self.rng.next() & 0xFF) >= chance {
-            return;
-        }
-        // Pick a kind: scorpion (60%), spy (28%), flag (12%).
-        let roll = self.rng.next() & 0xFF;
-        let kind_id = if roll < 154 {
-            crate::scoring::SCORPION
-        } else if roll < 226 {
-            crate::scoring::SPY
-        } else {
-            crate::scoring::FLAG
-        };
+    /// Deterministically spawn a ROM-typed bonus item at the given position.
+    /// The kind is supplied by `bonus_drop_for_kill` from the per-stage table,
+    /// not by RNG-weighted chance.
+    fn spawn_bonus_item(&mut self, x: i32, y: i32, kind: u8) {
         self.bonus_items.push(BonusItem {
-            kind: kind_id,
+            kind,
             x,
             y,
-            vy: 0.6 + (self.rng.next() & 0x3F) as f32 * 0.01,
+            vy: 0.65,
             frames_left: 360,
             alive: true,
         });

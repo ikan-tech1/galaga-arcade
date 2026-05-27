@@ -124,42 +124,53 @@ function noise(
   src.stop(v.ctx.currentTime + start + dur);
 }
 
+// ROM frame-count timings (60.606 Hz → 1 frame ≈ 16.5 ms). Values below
+// are tuned to the durations documented in the Galaga PCB sound table.
+const F = 1 / 60.606; // seconds per frame
+
 function playFire(v: Voice) {
-  tone(v, 'square', 1200, 0.04, 0, 0.001, 0.04, 0.13, 0, { to: 280, time: 0.06 });
-  tone(v, 'sawtooth', 220, 0.03, 0, 0.001, 0.04, 0.06);
+  // ROM "shot" SFX: 4-frame square-wave chirp.
+  tone(v, 'square', 1400, 4 * F, 0, 0.001, 0.03, 0.14, 0, { to: 320, time: 6 * F });
+  tone(v, 'sawtooth', 240, 3 * F, 0, 0.001, 0.03, 0.06);
 }
 
 function playExplosionSmall(v: Voice) {
-  noise(v, 0.08, 1400, 0, 0.002, 0.12, 0.22, 1.5);
-  tone(v, 'square', 100, 0.06, 0, 0.005, 0.1, 0.1, 0, { to: 40, time: 0.1 });
+  // ROM "enemy explode": 16-frame noise burst with a low-pitched thud.
+  noise(v, 16 * F, 1400, 0, 0.003, 0.16, 0.24, 1.5);
+  tone(v, 'square', 110, 12 * F, 0, 0.005, 0.12, 0.1, 0, { to: 40, time: 14 * F });
 }
 
 function playExplosionPlayer(v: Voice) {
-  noise(v, 0.22, 700, 0, 0.005, 0.35, 0.32, 0.8);
-  tone(v, 'sawtooth', 180, 0.2, 0, 0.005, 0.3, 0.18, 0, { to: 40, time: 0.4 });
-  tone(v, 'square', 80, 0.3, 0.05, 0.005, 0.2, 0.13, 0, { to: 35, time: 0.5 });
+  // ROM "player explode": 60-frame multi-band roar.
+  noise(v, 36 * F, 700, 0, 0.005, 0.4, 0.34, 0.8);
+  tone(v, 'sawtooth', 180, 24 * F, 0, 0.005, 0.3, 0.18, 0, { to: 38, time: 28 * F });
+  tone(v, 'square', 80, 30 * F, 4 * F, 0.005, 0.22, 0.13, 0, { to: 32, time: 36 * F });
 }
 
 function playCapture(v: Voice) {
+  // ROM "tractor capture": 8 ascending sine pulses + airy noise wash.
   for (let i = 0; i < 8; i++) {
-    tone(v, 'sine', 600 + i * 120, 0.08, i * 0.05, 0.005, 0.04, 0.16);
+    tone(v, 'sine', 540 + i * 120, 7 * F, i * 4 * F, 0.005, 0.05, 0.18);
   }
-  noise(v, 0.5, 1600, 0, 0.005, 0.6, 0.06, 6);
+  noise(v, 32 * F, 1600, 0, 0.005, 0.5, 0.06, 6);
 }
 
 function playTractor(v: Voice) {
+  // ROM "tractor beam hum": 5 stepped triangle tones over ~120 frames.
   for (let i = 0; i < 5; i++) {
-    tone(v, 'triangle', 440 - i * 30, 0.18, i * 0.18, 0.005, 0.06, 0.07);
+    tone(v, 'triangle', 460 - i * 28, 18 * F, i * 14 * F, 0.005, 0.06, 0.08);
   }
 }
 
 function playDive(v: Voice) {
-  tone(v, 'triangle', 220, 0.18, 0, 0.005, 0.05, 0.08, 0, { to: 80, time: 0.25 });
+  // ROM "dive whistle": single 12-frame triangle slide.
+  tone(v, 'triangle', 240, 12 * F, 0, 0.005, 0.04, 0.09, 0, { to: 70, time: 14 * F });
 }
 
 function playBossDive(v: Voice) {
-  tone(v, 'sawtooth', 180, 0.34, 0, 0.005, 0.06, 0.12, 0, { to: 70, time: 0.4 });
-  tone(v, 'square', 120, 0.34, 0.04, 0.005, 0.05, 0.07);
+  // ROM "boss dive": broader, lower pair of slides over ~24 frames.
+  tone(v, 'sawtooth', 180, 22 * F, 0, 0.005, 0.06, 0.12, 0, { to: 60, time: 26 * F });
+  tone(v, 'square', 130, 22 * F, 3 * F, 0.005, 0.05, 0.08);
 }
 
 function playStageCleared(v: Voice) {
