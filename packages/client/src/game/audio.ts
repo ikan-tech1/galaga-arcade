@@ -220,6 +220,90 @@ function playChallengeStart(v: Voice) {
   });
 }
 
+// ---------------------------------------------------------------------
+//  Meta-layer SFX: power-up pickup, bomb clear, mission complete, etc.
+// ---------------------------------------------------------------------
+
+function playPowerUpPickup(v: Voice) {
+  // Bright ascending arpeggio.
+  [659, 880, 1175, 1568].forEach((f, i) => {
+    tone(v, 'triangle', f, 0.09, i * 0.05, 0.005, 0.06, 0.18);
+    tone(v, 'square', f / 2, 0.09, i * 0.05, 0.005, 0.06, 0.07);
+  });
+}
+
+function playBombClear(v: Voice) {
+  noise(v, 0.4, 600, 0, 0.005, 0.45, 0.4, 1.2);
+  tone(v, 'sawtooth', 90, 0.32, 0, 0.005, 0.3, 0.22, 0, { to: 28, time: 0.36 });
+  tone(v, 'square', 200, 0.32, 0, 0.005, 0.2, 0.12, 0, { to: 50, time: 0.36 });
+}
+
+function playSideQuestDone(v: Voice) {
+  [784, 988, 1175].forEach((f, i) => {
+    tone(v, 'square', f, 0.1, i * 0.08, 0.005, 0.05, 0.15);
+  });
+}
+
+function playMissionComplete(v: Voice) {
+  // Big fanfare — 5-note ascending.
+  const notes = [
+    { f: 440, t: 0 },
+    { f: 554, t: 0.12 },
+    { f: 659, t: 0.24 },
+    { f: 880, t: 0.36 },
+    { f: 1175, t: 0.48 },
+    { f: 1567, t: 0.62, d: 0.45 },
+  ];
+  notes.forEach((n) =>
+    tone(v, 'square', n.f, n.d ?? 0.18, n.t, 0.005, 0.08, 0.2),
+  );
+  notes.forEach((n) =>
+    tone(v, 'triangle', n.f / 2, n.d ?? 0.18, n.t, 0.005, 0.08, 0.12),
+  );
+}
+
+function playUpgradePurchase(v: Voice) {
+  [392, 587, 880].forEach((f, i) => {
+    tone(v, 'square', f, 0.13, i * 0.08, 0.005, 0.04, 0.16);
+  });
+}
+
+function playModeSelect(v: Voice) {
+  tone(v, 'square', 523, 0.06, 0, 0.002, 0.04, 0.12);
+  tone(v, 'triangle', 784, 0.1, 0.04, 0.002, 0.05, 0.14);
+}
+
+function playEasterEgg(v: Voice) {
+  // Discordant fanfare for "found a secret".
+  [330, 415, 523, 659, 880, 1318].forEach((f, i) => {
+    tone(v, 'square', f, 0.16, i * 0.07, 0.005, 0.06, 0.15);
+    tone(v, 'sawtooth', f * 1.5, 0.12, i * 0.07, 0.005, 0.04, 0.07);
+  });
+}
+
+function playStreak(v: Voice) {
+  [880, 988, 1175, 1568].forEach((f, i) => {
+    tone(v, 'triangle', f, 0.12, i * 0.06, 0.005, 0.06, 0.16);
+  });
+}
+
+export function playMetaCue(kind: string) {
+  const v = ensureCtx();
+  if (!v || !v.unlocked) return;
+  switch (kind) {
+    case 'powerup_pickup': playPowerUpPickup(v); break;
+    case 'bomb_clear':
+    case 'bomb_clear_big': playBombClear(v); break;
+    case 'sidequest_done': playSideQuestDone(v); break;
+    case 'mission_complete': playMissionComplete(v); break;
+    case 'upgrade_purchase': playUpgradePurchase(v); break;
+    case 'mode_select': playModeSelect(v); break;
+    case 'easter_egg': playEasterEgg(v); break;
+    case 'streak_bump': playStreak(v); break;
+    default: break;
+  }
+}
+
 function dispatch(v: Voice, e: AudioEvent) {
   switch (e.kind) {
     case 'fire': playFire(v); break;
@@ -275,15 +359,41 @@ function loopMusic(notes: Array<[number, number]>, gain = 0.06) {
   return { stop: () => { cancelled = true; } };
 }
 
-export function startStageMusic() {
-  stopStageMusic();
-  // Marching melody — original composition
-  const notes: Array<[number, number]> = [
+/** Mode-specific stage-loop notes. */
+const STAGE_LOOPS: Record<string, Array<[number, number]>> = {
+  classic: [
     [392, 0.18], [494, 0.18], [587, 0.18], [494, 0.18],
     [392, 0.18], [330, 0.18], [392, 0.18], [494, 0.18],
     [523, 0.18], [659, 0.18], [784, 0.18], [659, 0.18],
     [523, 0.18], [440, 0.18], [523, 0.18], [392, 0.36],
-  ];
+  ],
+  arcadePlus: [
+    [440, 0.14], [659, 0.14], [880, 0.14], [659, 0.14],
+    [523, 0.14], [880, 0.14], [1047, 0.14], [880, 0.14],
+    [392, 0.14], [587, 0.14], [784, 0.14], [587, 0.14],
+    [494, 0.14], [659, 0.14], [880, 0.28], [988, 0.28],
+  ],
+  daily: [
+    [330, 0.2], [415, 0.2], [493, 0.2], [415, 0.2],
+    [262, 0.2], [330, 0.2], [415, 0.4], [330, 0.4],
+  ],
+  mission: [
+    [196, 0.2], [262, 0.2], [330, 0.2], [392, 0.2],
+    [523, 0.2], [659, 0.2], [784, 0.4], [659, 0.4],
+    [196, 0.2], [262, 0.2], [330, 0.2], [392, 0.2],
+    [523, 0.4], [659, 0.4],
+  ],
+  endless: [
+    [349, 0.13], [466, 0.13], [622, 0.13], [466, 0.13],
+    [349, 0.13], [466, 0.13], [622, 0.13], [831, 0.13],
+    [880, 0.26], [988, 0.26], [880, 0.13], [784, 0.13],
+    [659, 0.26], [523, 0.26],
+  ],
+};
+
+export function startStageMusic(mode?: string) {
+  stopStageMusic();
+  const notes = STAGE_LOOPS[mode ?? 'classic'] ?? STAGE_LOOPS.classic;
   stageMusic = loopMusic(notes, 0.05);
 }
 
