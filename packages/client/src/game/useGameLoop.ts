@@ -16,7 +16,11 @@ import type { HiScoreEntry } from '@galaga/shared';
 
 interface UseGameLoopArgs {
   settings: { settings: Settings };
-  hiscores: { list: HiScoreEntry[] };
+  hiscores: {
+    list: HiScoreEntry[];
+    qualifyingThreshold: number;
+    topScore: number;
+  };
   caps?: { lowEnd: boolean; reducedMotion: boolean };
 }
 
@@ -34,6 +38,11 @@ export function useGameLoop({ settings, hiscores, caps }: UseGameLoopArgs) {
     submitHiScore: () => undefined,
     reset: () => undefined,
   });
+  const gameInstanceRef = useRef<any>(null);
+  // Stable ref for the latest hi-score snapshot — keeps the engine in sync
+  // without retriggering the heavy WASM init effect.
+  const hiscoresRef = useRef(hiscores);
+  hiscoresRef.current = hiscores;
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +70,18 @@ export function useGameLoop({ settings, hiscores, caps }: UseGameLoopArgs) {
       const GameCtor = await loadGame();
       if (cancelled) return;
       gameInstance = new GameCtor();
+      gameInstanceRef.current = gameInstance;
+      // Mirror the persisted top-10 leaderboard into the engine so the
+      // HUD HIGH SCORE matches localStorage and the GameOver phase only
+      // advances to the entry screen for genuinely qualifying scores.
+      try {
+        gameInstance?.set_hi_score?.(hiscoresRef.current.topScore);
+        gameInstance?.set_hi_score_threshold?.(
+          hiscoresRef.current.qualifyingThreshold,
+        );
+      } catch {
+        /* engine pre-update may not yet expose these */
+      }
       apiRef.current = {
         startGame: () => {
           unlockAudio();
@@ -140,6 +161,18 @@ export function useGameLoop({ settings, hiscores, caps }: UseGameLoopArgs) {
   useEffect(() => {
     setVolumes(settings.settings.sfx, settings.settings.music);
   }, [settings.settings.sfx, settings.settings.music]);
+
+  // Re-push hi-score gate whenever the persisted leaderboard changes.
+  useEffect(() => {
+    const g = gameInstanceRef.current;
+    if (!g) return;
+    try {
+      g.set_hi_score?.(hiscores.topScore);
+      g.set_hi_score_threshold?.(hiscores.qualifyingThreshold);
+    } catch {
+      /* engine pre-update or wasm not ready */
+    }
+  }, [hiscores.qualifyingThreshold, hiscores.topScore]);
 
   // Listen for start/fire as a global gate to start playing (more obvious than
   // requiring Enter-only).

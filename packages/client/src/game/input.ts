@@ -1,4 +1,4 @@
-/** Keyboard + gamepad input → packed bitfield matching Rust `Inputs`. */
+/** Keyboard + gamepad + touch input → packed bitfield matching Rust `Inputs`. */
 
 export const INPUT_LEFT = 1 << 0;
 export const INPUT_RIGHT = 1 << 1;
@@ -35,6 +35,42 @@ const KEY_MAP: Record<string, number> = {
   Escape: 0,
 };
 
+// Touch / virtual control bits live at module scope so any UI surface can
+// drive them without prop-drilling through the loop.
+let touchBits = 0;
+const touchListeners = new Set<(b: number) => void>();
+
+export function setTouchBit(bit: number, pressed: boolean): void {
+  const prev = touchBits;
+  if (pressed) touchBits |= bit;
+  else touchBits &= ~bit;
+  if (prev !== touchBits) {
+    for (const l of touchListeners) l(touchBits);
+  }
+}
+
+export function pulseTouchBit(bit: number, frames = 4): void {
+  setTouchBit(bit, true);
+  // Release after a few frames so a tap is registered as one press.
+  window.setTimeout(() => setTouchBit(bit, false), Math.max(16, frames * 16));
+}
+
+export function clearTouchBits(): void {
+  if (touchBits !== 0) {
+    touchBits = 0;
+    for (const l of touchListeners) l(0);
+  }
+}
+
+export function readTouchBits(): number {
+  return touchBits;
+}
+
+export function subscribeTouchBits(fn: (b: number) => void): () => void {
+  touchListeners.add(fn);
+  return () => touchListeners.delete(fn);
+}
+
 export function createInputDevices(): InputDevices {
   let bits = 0;
 
@@ -52,7 +88,10 @@ export function createInputDevices(): InputDevices {
       if (flag !== 0) e.preventDefault();
     }
   };
-  const blur = () => { bits = 0; };
+  const blur = () => {
+    bits = 0;
+    clearTouchBits();
+  };
 
   return {
     bind(target) {
@@ -67,7 +106,7 @@ export function createInputDevices(): InputDevices {
       };
     },
     read() {
-      let extra = 0;
+      let extra = touchBits;
       if (typeof navigator !== 'undefined' && navigator.getGamepads) {
         const gps = navigator.getGamepads?.() ?? [];
         for (const gp of gps) {

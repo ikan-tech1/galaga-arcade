@@ -9,6 +9,7 @@ interface GameCanvasProps {
   frame: FrameState | null;
   settings: Settings;
   attract: boolean;
+  quality?: 'high' | 'medium' | 'low';
 }
 
 function spriteName(kind: Sprite['kind'], frameIdx: number, dual: boolean): SpriteName | null {
@@ -35,7 +36,7 @@ function spriteName(kind: Sprite['kind'], frameIdx: number, dual: boolean): Spri
   void dual;
 }
 
-export function GameCanvas({ frame, settings, attract }: GameCanvasProps) {
+export function GameCanvas({ frame, settings, attract, quality = 'high' }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const starfieldRef = useRef<Starfield | null>(null);
   const particlesRef = useRef<Particles | null>(null);
@@ -46,7 +47,12 @@ export function GameCanvas({ frame, settings, attract }: GameCanvasProps) {
     sheetsRef.current = bakeAllSprites();
     starfieldRef.current = new Starfield(13371337);
     particlesRef.current = new Particles();
+    particlesRef.current.setQuality(quality);
   }, []);
+
+  useEffect(() => {
+    particlesRef.current?.setQuality(quality);
+  }, [quality]);
 
   useEffect(() => {
     if (!frame || !canvasRef.current) return;

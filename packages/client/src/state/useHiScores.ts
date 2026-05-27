@@ -45,5 +45,20 @@ export function useHiScores() {
 
   const reset = useCallback(() => setList(DEFAULT_LIST), []);
 
-  return { list, add, reset };
+  /** Score required to qualify for the top-10. Pushed into the engine so its
+   *  Phase::GameOver gate matches the React shell's persisted leaderboard. */
+  const qualifyingThreshold =
+    list.length < 10 ? 0 : Math.min(...list.map((e) => e.score));
+
+  /** Top score (used as the engine's HUD HIGH SCORE). */
+  const topScore = list.reduce((m, e) => Math.max(m, e.score), 0);
+
+  /** True iff `score` would land in the top-10. */
+  const qualifies = useCallback(
+    (score: number) =>
+      score > 0 && (list.length < 10 || score > qualifyingThreshold),
+    [list, qualifyingThreshold],
+  );
+
+  return { list, add, reset, qualifyingThreshold, topScore, qualifies };
 }

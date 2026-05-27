@@ -105,6 +105,7 @@ export function App() {
           frame={game.frame}
           settings={settings.settings}
           attract={phase === 'attract' || phase === 'demo'}
+          quality={caps.lowEnd ? 'low' : caps.narrow ? 'medium' : 'high'}
         />
 
         <HUD

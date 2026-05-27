@@ -34,6 +34,18 @@
   --radius-cab: 14px;
 
   --tap: 4px;
+
+  /* Safe-area insets — fall back to 0 for non-notched devices. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Reserved for the touch-control strip; 0 on desktop, ~36vh on phones. */
+  --touch-strip: 0px;
+
+  /* Minimum tap target — meets WCAG 2.5.5 / Apple HIG (44pt) and Android (48dp). */
+  --tap-target: 48px;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -45,21 +57,26 @@ html, body, #root {
   background: var(--bg-deep);
   color: var(--ink);
   font-family: var(--pixel-font);
-  /* Press Start 2P is a bitmap-style pixel font. Anti-aliasing softens its
-     designed-aliased edges. Disable smoothing globally; let canvas/SVG
-     handle their own rendering. */
-  -webkit-font-smoothing: none;
-  -moz-osx-font-smoothing: grayscale;
-  font-smooth: never;
-  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  /* Fill the actual visible viewport on mobile (incl. iOS dynamic toolbars). */
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+html {
+  /* Stop pull-to-refresh, rubber-banding, accidental zoom on iOS. */
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
 }
 
 body {
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
   background:
     radial-gradient(circle at 20% 0%, rgba(124, 58, 237, 0.18), transparent 55%),
     radial-gradient(circle at 80% 100%, rgba(34, 211, 238, 0.10), transparent 50%),
@@ -73,24 +90,64 @@ body {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 16px;
+  padding:
+    max(16px, var(--safe-top))
+    max(16px, var(--safe-right))
+    calc(max(16px, var(--safe-bottom)) + var(--touch-strip))
+    max(16px, var(--safe-left));
+  /* Game surface should never scroll or zoom. */
+  touch-action: none;
+  overflow: hidden;
+}
+
+.cabinet--touch {
+  /* Reserve space at the bottom for the touch-control strip. */
+  --touch-strip: clamp(140px, 30vh, 220px);
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  .cabinet--touch {
+    --touch-strip: 0px;
+  }
 }
 
 .cabinet__frame {
   position: relative;
-  width: min(100vw, calc((100vh - 32px) * (224 / 288)));
+  /*
+   * Lock to the 224 / 288 arcade aspect. Width is the smaller of:
+   *   - viewport width minus safe-area padding
+   *   - whatever width keeps us inside (visible-height - touch-strip - padding)
+   */
+  width: min(
+    100%,
+    calc((100dvh - var(--touch-strip) - max(16px, var(--safe-top)) - max(16px, var(--safe-bottom)) - 16px) * (224 / 288))
+  );
+  max-width: 720px;
   aspect-ratio: 224 / 288;
   background: var(--bg);
   border-radius: var(--radius-cab);
   overflow: hidden;
-  /* Tight neon glow — large blurs read as "fuzzy", so keep stroke crisp
-     and only allow a small halo. */
   box-shadow:
     0 0 0 2px var(--bezel-2),
     0 0 0 6px var(--bezel-1),
     0 0 0 8px #050007,
-    0 12px 28px -8px rgba(34, 211, 238, 0.22),
-    0 0 32px -10px rgba(255, 58, 166, 0.30);
+    0 30px 60px -10px rgba(34, 211, 238, 0.25),
+    0 0 80px -20px rgba(255, 58, 166, 0.4);
+  /* Block touch gestures from scrolling the page; pad/fire surfaces handle their own. */
+  touch-action: none;
+}
+
+/* On very narrow phones drop the chunky bezel halo so the frame isn't crowded. */
+@media (max-width: 420px) {
+  .cabinet__frame {
+    border-radius: 8px;
+    box-shadow:
+      0 0 0 1px var(--bezel-2),
+      0 0 0 3px var(--bezel-1),
+      0 0 0 4px #050007,
+      0 16px 40px -16px rgba(34, 211, 238, 0.25),
+      0 0 60px -20px rgba(255, 58, 166, 0.4);
+  }
 }
 
 /* Subtle bezel light */
@@ -116,6 +173,7 @@ body {
   background: #000;
   display: block;
   z-index: 1;
+  touch-action: none;
 }
 
 /* CRT post-process canvas overlay */
@@ -151,47 +209,28 @@ body {
 
 /* === Title / logo ======================================================= */
 
-/* Title logo — pixel font requires integer px sizes to stay sharp.
-   We pick from a stepped scale (no fractional vmin), and avoid any
-   transform that would force subpixel rasterisation. */
 .title-logo {
   font-family: var(--pixel-font);
-  font-size: 32px;
-  letter-spacing: 8px;
+  font-size: clamp(24px, 6.6vmin, 56px);
+  letter-spacing: 0.1em;
   color: var(--neon-cyan);
-  /* Crisp 1px outline + small halo. Larger blurs read as soft/fuzzy. */
   text-shadow:
-    0 0 1px #22d3ee,
-    0 0 8px rgba(34, 211, 238, 0.55),
-    0 0 18px rgba(255, 58, 166, 0.22);
+    0 0 4px #22d3ee,
+    0 0 16px rgba(34, 211, 238, 0.65),
+    0 0 32px rgba(255, 58, 166, 0.35);
+  transform: skew(-2deg, 0);
   text-align: center;
   line-height: 1;
-  margin: 0;
-  -webkit-font-smoothing: none;
-  -moz-osx-font-smoothing: grayscale;
-  font-smooth: never;
-  image-rendering: pixelated;
-}
-
-@media (min-width: 480px) {
-  .title-logo { font-size: 40px; letter-spacing: 10px; }
-}
-@media (min-width: 720px) {
-  .title-logo { font-size: 48px; letter-spacing: 12px; }
 }
 
 .title-logo__sub {
   display: block;
-  margin-top: 12px;
-  font-family: var(--pixel-font);
-  font-size: 10px;
-  letter-spacing: 6px;
+  margin-top: 10px;
+  font-size: 0.35em;
+  letter-spacing: 0.4em;
   color: var(--neon-mag);
-  text-shadow:
-    0 0 1px #ff3aa6,
-    0 0 6px rgba(255, 58, 166, 0.55);
-  -webkit-font-smoothing: none;
-  font-smooth: never;
+  text-shadow: var(--shadow-neon-mag);
+  transform: skew(0);
 }
 
 /* === Generic neon button ================================================ */
@@ -202,12 +241,16 @@ body {
   background: transparent;
   color: var(--neon-cyan);
   border: 2px solid var(--neon-cyan);
-  padding: 10px 14px;
+  padding: 12px 16px;
   letter-spacing: 0.18em;
   cursor: pointer;
   text-shadow: var(--shadow-neon-cyan);
   box-shadow: var(--shadow-neon-cyan), inset 0 0 8px rgba(34, 211, 238, 0.15);
   transition: transform 80ms ease-out, background 120ms ease-out;
+  /* Tap-target compliance. */
+  min-height: var(--tap-target);
+  min-width: var(--tap-target);
+  touch-action: manipulation;
 }
 
 .neon-btn:hover { background: rgba(34, 211, 238, 0.1); }
@@ -215,6 +258,14 @@ body {
 
 .neon-btn--mag { color: var(--neon-mag); border-color: var(--neon-mag); text-shadow: var(--shadow-neon-mag); box-shadow: var(--shadow-neon-mag), inset 0 0 8px rgba(255, 58, 166, 0.15); }
 .neon-btn--gold { color: var(--neon-gold); border-color: var(--neon-gold); text-shadow: var(--shadow-neon-gold); box-shadow: var(--shadow-neon-gold), inset 0 0 8px rgba(255, 209, 102, 0.15); }
+.neon-btn--start {
+  /* Slight pulse to draw the eye on attract. */
+  animation: start-pulse 1.6s ease-in-out infinite;
+}
+@keyframes start-pulse {
+  0%, 100% { box-shadow: var(--shadow-neon-cyan), inset 0 0 8px rgba(34, 211, 238, 0.15); }
+  50%      { box-shadow: 0 0 8px #22d3ee, 0 0 22px rgba(34, 211, 238, 0.7), inset 0 0 14px rgba(34, 211, 238, 0.25); }
+}
 
 /* === HUD ================================================================ */
 
@@ -225,10 +276,8 @@ body {
   z-index: 3;
   font-family: var(--pixel-font);
   font-size: 9px;
-  letter-spacing: 1px;
+  letter-spacing: 0.1em;
   color: var(--ink);
-  -webkit-font-smoothing: none;
-  font-smooth: never;
 }
 
 .hud__top {
@@ -406,6 +455,48 @@ body {
   50% { background: rgba(34, 211, 238, 0.18); }
 }
 
+.hientry__slot {
+  cursor: pointer;
+  background: rgba(22, 2, 39, 0.55);
+  font-family: var(--pixel-font);
+  touch-action: manipulation;
+}
+
+.hientry__keyboard {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(28px, 1fr));
+  gap: 4px;
+  width: min(92%, 280px);
+  margin: 0 auto;
+}
+
+.hientry__key {
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  background: rgba(22, 2, 39, 0.7);
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  padding: 8px 0;
+  min-height: 36px;
+  letter-spacing: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hientry__key--active,
+.hientry__key:active {
+  background: rgba(34, 211, 238, 0.18);
+  color: var(--neon-cyan);
+  border-color: var(--neon-cyan);
+  text-shadow: var(--shadow-neon-cyan);
+}
+
+.hientry__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 /* === Game over ========================================================== */
 
 .gameover {
@@ -442,6 +533,10 @@ body {
   z-index: 7;
   font-family: var(--pixel-font);
   color: var(--ink);
+  /* Allow vertical scroll on tiny screens — the panel is dense. */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .settings__title {
@@ -457,10 +552,11 @@ body {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  padding: 7px 0;
+  padding: 8px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 9px;
   letter-spacing: 0.16em;
+  min-height: 44px;
 }
 
 .settings__row label { color: var(--ink-dim); }
@@ -471,36 +567,58 @@ body {
   color: var(--neon-cyan);
   border: 1px solid var(--line);
   font-family: var(--pixel-font);
-  font-size: 9px;
-  padding: 4px 6px;
+  font-size: 11px; /* ≥16px-equivalent feel; iOS won't zoom because viewport is locked */
+  padding: 8px 10px;
   outline: none;
+  min-height: 36px;
+  touch-action: manipulation;
 }
 
 .settings__toggle {
-  width: 44px;
-  height: 18px;
+  width: 56px;
+  height: 28px;
   background: var(--bg-elev);
   border: 1px solid var(--line);
   position: relative;
   cursor: pointer;
+  /* Make the whole rect tappable — visual is 56×28 but hit area is 56×44. */
+  padding: 0;
+  margin: 0;
+  border-radius: 2px;
+  touch-action: manipulation;
+}
+.settings__toggle::after {
+  content: '';
+  position: absolute;
+  inset: -8px -2px;
 }
 
 .settings__toggle--on { background: rgba(34, 211, 238, 0.18); border-color: var(--neon-cyan); }
 .settings__toggle__dot {
-  width: 14px; height: 14px;
+  width: 22px; height: 22px;
   background: var(--neon-cyan);
   position: absolute;
-  top: 1px;
-  left: 1px;
+  top: 2px;
+  left: 2px;
   transition: left 120ms ease;
+  border-radius: 1px;
 }
-.settings__toggle--on .settings__toggle__dot { left: 27px; }
+.settings__toggle--on .settings__toggle__dot { left: 30px; }
 
 .settings__actions {
   margin-top: auto;
+  padding-top: 12px;
   display: flex;
   gap: 8px;
   justify-content: center;
+}
+
+/* On very narrow viewports flip the settings panel to a bottom-sheet style. */
+@media (max-width: 480px), (max-height: 560px) {
+  .settings {
+    padding: 12px 12px calc(20px + var(--safe-bottom));
+  }
+  .settings__row { font-size: 10px; padding: 10px 0; }
 }
 
 /* === Pause ============================================================== */
@@ -558,136 +676,178 @@ body {
 .cab-trim--top    { top: -8px; }
 .cab-trim--bottom { bottom: -8px; }
 
+/* === Touch controls ===================================================== */
+
+.touch {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--touch-strip);
+  padding:
+    8px
+    max(10px, var(--safe-right))
+    max(10px, var(--safe-bottom))
+    max(10px, var(--safe-left));
+  display: grid;
+  grid-template-columns: 1fr 36% 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "chips   chips   chips"
+    "pad     .       fire";
+  gap: 8px;
+  z-index: 12;
+  pointer-events: none;
+  /* Subtle gradient so controls read against bright explosions in-frame. */
+  background: linear-gradient(180deg, rgba(7, 0, 15, 0) 0%, rgba(7, 0, 15, 0.65) 35%, rgba(7, 0, 15, 0.92) 100%);
+  /* Block any kind of system gesture inside the strip. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.touch__chips {
+  grid-area: chips;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.touch__chip {
+  font-family: var(--pixel-font);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  background: rgba(7, 0, 15, 0.7);
+  color: var(--neon-cyan);
+  border: 1px solid var(--neon-cyan);
+  text-shadow: var(--shadow-neon-cyan);
+  box-shadow: 0 0 6px rgba(34, 211, 238, 0.35);
+  padding: 8px 14px;
+  min-height: 36px;
+  min-width: 60px;
+  border-radius: 4px;
+  touch-action: manipulation;
+}
+.touch__chip--mag {
+  color: var(--neon-mag);
+  border-color: var(--neon-mag);
+  text-shadow: var(--shadow-neon-mag);
+  box-shadow: 0 0 6px rgba(255, 58, 166, 0.35);
+}
+.touch__chip:active { transform: translateY(1px); }
+
+.touch__pad {
+  grid-area: pad;
+  position: relative;
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  justify-items: center;
+  background: rgba(34, 211, 238, 0.05);
+  border: 1px solid rgba(34, 211, 238, 0.45);
+  border-radius: 14px;
+  box-shadow: inset 0 0 18px rgba(34, 211, 238, 0.10), 0 0 12px rgba(34, 211, 238, 0.18);
+  overflow: hidden;
+  /* Track-pad for the thumb. */
+  touch-action: none;
+}
+
+.touch__pad-hint {
+  font-family: var(--pixel-font);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  color: var(--neon-cyan);
+  opacity: 0.7;
+  text-shadow: var(--shadow-neon-cyan);
+  pointer-events: none;
+}
+
+.touch__dbtn {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  background: rgba(34, 211, 238, 0.10);
+  color: var(--neon-cyan);
+  border: 1px solid rgba(34, 211, 238, 0.55);
+  border-radius: 12px;
+  font-size: 24px;
+  text-shadow: var(--shadow-neon-cyan);
+  touch-action: manipulation;
+}
+.touch__dbtn:active,
+.touch__dbtn--active {
+  background: rgba(34, 211, 238, 0.28);
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.55), inset 0 0 14px rgba(34, 211, 238, 0.4);
+}
+.touch__dbtn--l { margin-left: 6px; }
+.touch__dbtn--r { margin-right: 6px; }
+
+.touch__fire {
+  grid-area: fire;
+  position: relative;
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 58, 166, 0.06);
+  border: 1px solid rgba(255, 58, 166, 0.5);
+  box-shadow: inset 0 0 22px rgba(255, 58, 166, 0.12), 0 0 16px rgba(255, 58, 166, 0.22);
+  overflow: hidden;
+  touch-action: none;
+}
+.touch__fire:active,
+.touch__fire--active {
+  background: rgba(255, 58, 166, 0.22);
+  box-shadow: inset 0 0 30px rgba(255, 58, 166, 0.4), 0 0 28px rgba(255, 58, 166, 0.55);
+}
+.touch__fire-ring {
+  position: absolute;
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  border: 2px solid var(--neon-mag);
+  box-shadow: 0 0 16px rgba(255, 58, 166, 0.6), inset 0 0 14px rgba(255, 58, 166, 0.4);
+}
+.touch__fire-label {
+  position: relative;
+  font-family: var(--pixel-font);
+  font-size: 12px;
+  letter-spacing: 0.25em;
+  color: var(--neon-mag);
+  text-shadow: var(--shadow-neon-mag);
+}
+
 /* === Responsive small-screen tweaks ==================================== */
 
 @media (max-width: 360px) {
-  .title-logo { font-size: 24px; letter-spacing: 6px; }
+  .title-logo { font-size: 10vmin; }
+  .menu { padding: 18px 12px; }
+  .menu__bottom { font-size: 7px; }
 }
 
-/* === Loading / boot screen ============================================= */
-
-.loading {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background:
-    radial-gradient(circle at 50% 30%, rgba(124, 58, 237, 0.20), transparent 55%),
-    radial-gradient(circle at 50% 80%, rgba(34, 211, 238, 0.12), transparent 55%),
-    var(--bg-deep);
-  z-index: 20;
-  pointer-events: auto;
-  font-family: var(--pixel-font);
-  -webkit-font-smoothing: none;
-  -moz-osx-font-smoothing: grayscale;
-  font-smooth: never;
-  transition: opacity 280ms ease-out;
-}
-.loading--leaving { opacity: 0; pointer-events: none; }
-
-.loading__stack {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 22px;
-  padding: 24px;
-  max-width: 100%;
-}
-
-.loading__ship {
-  width: 32px;
-  height: 32px;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.45));
-}
-
-.loading__logo {
-  font-family: var(--pixel-font);
-  font-size: 28px;
-  letter-spacing: 8px;
-  color: var(--neon-cyan);
-  text-shadow:
-    0 0 1px #22d3ee,
-    0 0 8px rgba(34, 211, 238, 0.55);
-  line-height: 1;
-  margin: 0;
-}
-@media (min-width: 480px) {
-  .loading__logo { font-size: 36px; letter-spacing: 10px; }
-}
-
-.loading__sub {
-  font-family: var(--pixel-font);
-  font-size: 10px;
-  letter-spacing: 6px;
-  color: var(--neon-mag);
-  text-shadow:
-    0 0 1px #ff3aa6,
-    0 0 6px rgba(255, 58, 166, 0.55);
-}
-
-.loading__bar {
-  position: relative;
-  width: 220px;
-  max-width: 70vw;
-  height: 10px;
-  border: 2px solid var(--neon-cyan);
-  background: var(--bg-elev);
-  box-shadow:
-    0 0 1px var(--neon-cyan),
-    0 0 8px rgba(34, 211, 238, 0.45),
-    inset 0 0 4px rgba(34, 211, 238, 0.18);
-  overflow: hidden;
-}
-
-.loading__bar__fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 0%;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--neon-cyan) 0 6px,
-    var(--neon-blue) 6px 12px
-  );
-  transition: width 180ms ease-out;
-}
-
-.loading__text {
-  font-family: var(--pixel-font);
-  font-size: 11px;
-  letter-spacing: 6px;
-  color: var(--neon-gold);
-  text-shadow:
-    0 0 1px #ffd166,
-    0 0 6px rgba(255, 209, 102, 0.45);
-}
-
-.loading__text__dots {
-  display: inline-block;
-  width: 1em;
-  text-align: left;
-}
-
-.loading__hint {
-  font-family: var(--pixel-font);
-  font-size: 8px;
-  letter-spacing: 4px;
-  color: var(--ink-faint);
-  margin-top: 4px;
-}
-
-.loading__rule {
-  width: 240px;
-  max-width: 80vw;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    transparent 0,
-    rgba(255, 58, 166, 0.6) 30%,
-    rgba(34, 211, 238, 0.6) 70%,
-    transparent 100%
-  );
-  margin-top: 6px;
+/* Landscape phones: hide the touch strip — keyboard or rotated cabinet only */
+@media (orientation: landscape) and (max-height: 480px) {
+  .touch { display: none; }
+  /* Add a soft hint to rotate. */
+  .cabinet--touch::before {
+    content: 'ROTATE TO PORTRAIT FOR TOUCH PLAY';
+    position: fixed;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--pixel-font);
+    font-size: 7px;
+    letter-spacing: 0.3em;
+    color: var(--ink-faint);
+    background: rgba(7, 0, 15, 0.6);
+    padding: 4px 8px;
+    border-radius: 3px;
+    z-index: 13;
+    pointer-events: none;
+  }
 }
 
 /* === Accessibility =====================================================*/
@@ -696,7 +856,8 @@ body {
   .blink,
   .stage-banner__text,
   .pause__text,
-  .hientry__slot--active {
+  .hientry__slot--active,
+  .neon-btn--start {
     animation: none;
   }
 }

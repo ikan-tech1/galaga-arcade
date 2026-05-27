@@ -4,13 +4,14 @@ interface Props {
   hiScores: HiScoreEntry[];
   onStart: () => void;
   onSettings: () => void;
+  touch?: boolean;
 }
 
 function pad(n: number, w: number) {
   return n.toString().padStart(w, '0');
 }
 
-export function AttractScreen({ hiScores, onStart, onSettings }: Props) {
+export function AttractScreen({ hiScores, onStart, onSettings, touch = false }: Props) {
   return (
     <div className="overlay overlay--interactive">
       <div className="menu">
@@ -25,8 +26,8 @@ export function AttractScreen({ hiScores, onStart, onSettings }: Props) {
         <div className="menu__center">
           <HiScoreList list={hiScores.slice(0, 5)} />
           <div style={{ height: 8 }} />
-          <button className="neon-btn" onClick={onStart}>
-            INSERT COIN · PRESS START
+          <button className="neon-btn neon-btn--start" onClick={onStart}>
+            {touch ? 'TAP TO START' : 'INSERT COIN · PRESS START'}
           </button>
           <button className="neon-btn neon-btn--mag" onClick={onSettings}>
             SETTINGS
@@ -34,8 +35,12 @@ export function AttractScreen({ hiScores, onStart, onSettings }: Props) {
         </div>
 
         <div className="menu__bottom">
-          <div>← → MOVE · SPACE/Z FIRE · ENTER START</div>
-          <div className="blink">PRESS START</div>
+          <div>
+            {touch
+              ? 'DRAG · TAP TO FIRE · ❚❚ TO PAUSE'
+              : '← → MOVE · SPACE/Z FIRE · ENTER START'}
+          </div>
+          <div className="blink">{touch ? 'TAP TO PLAY' : 'PRESS START'}</div>
         </div>
       </div>
     </div>

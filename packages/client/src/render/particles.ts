@@ -13,10 +13,30 @@ interface Particle {
 
 export class Particles {
   private pool: Particle[] = [];
+  /** 0..1 — multiplied into burst counts. Reduce on low-end devices. */
+  scale = 1;
+  /** Hard cap to keep low-end phones from drowning in particles. */
+  maxAlive = 240;
+
+  setQuality(level: 'high' | 'medium' | 'low'): void {
+    if (level === 'high') {
+      this.scale = 1;
+      this.maxAlive = 320;
+    } else if (level === 'medium') {
+      this.scale = 0.6;
+      this.maxAlive = 160;
+    } else {
+      this.scale = 0.35;
+      this.maxAlive = 80;
+    }
+  }
 
   burst(x: number, y: number, count: number, palette: string[], spread = 1.5) {
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.7;
+    const want = Math.max(1, Math.round(count * this.scale));
+    const slots = Math.max(0, this.maxAlive - this.pool.length);
+    const n = Math.min(want, slots);
+    for (let i = 0; i < n; i++) {
+      const angle = (i / n) * Math.PI * 2 + Math.random() * 0.7;
       const speed = (Math.random() * 1.5 + 0.6) * spread;
       this.pool.push({
         x,
