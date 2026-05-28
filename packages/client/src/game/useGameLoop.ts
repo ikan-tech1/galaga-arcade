@@ -97,6 +97,7 @@ export function useGameLoop({
   const [frame, setFrame] = useState<FrameState | null>(null);
   const [meta, setMeta] = useState<MetaSnapshot>(EMPTY_SNAPSHOT);
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const apiRef = useRef<GameApi>({
     startGame: () => undefined,
     submitHiScore: () => undefined,
@@ -284,6 +285,7 @@ export function useGameLoop({
       rafId = requestAnimationFrame(loop);
     })().catch((err) => {
       console.error('Failed to init engine', err);
+      setLoadError(true);
     });
 
     return () => {
@@ -330,5 +332,5 @@ export function useGameLoop({
   void INPUT_START;
   void dailyFor; // keep import warmed
 
-  return { frame, meta, ready, api: apiRef.current };
+  return { frame, meta, ready, loadError, api: apiRef.current };
 }

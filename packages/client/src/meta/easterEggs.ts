@@ -49,6 +49,36 @@ export const EASTER_EGGS: Record<EasterEggId, EasterEggDef> = {
     hint: 'Seven taps reveal the developer overlay.',
     reward: 200,
   },
+  pause30: {
+    id: 'pause30',
+    name: 'PATIENCE',
+    hint: 'Hold the pause for an unusually long time.',
+    reward: 150,
+  },
+  doubleTapLogo: {
+    id: 'doubleTapLogo',
+    name: 'DOUBLE TAP',
+    hint: 'Tap the logo twice in quick succession.',
+    reward: 100,
+  },
+  noFireStage1: {
+    id: 'noFireStage1',
+    name: 'PACIFIST',
+    hint: 'Clear the first stage without firing a single shot.',
+    reward: 300,
+  },
+  thirteenStage: {
+    id: 'thirteenStage',
+    name: 'UNLUCKY',
+    hint: 'Something happens on stage thirteen.',
+    reward: 130,
+  },
+  devChord: {
+    id: 'devChord',
+    name: 'DEV CHORD',
+    hint: 'A secret key combination whispered by the developer.',
+    reward: 500,
+  },
 };
 
 export const EGG_ORDER: EasterEggId[] = [
@@ -60,6 +90,11 @@ export const EGG_ORDER: EasterEggId[] = [
   'secretShipUnlock',
   'rainbowMode',
   'retroDebug',
+  'pause30',
+  'doubleTapLogo',
+  'noFireStage1',
+  'thirteenStage',
+  'devChord',
 ];
 
 // Konami sequence by KeyboardEvent.code.

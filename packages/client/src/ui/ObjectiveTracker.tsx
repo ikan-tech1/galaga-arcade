@@ -1,4 +1,4 @@
-import type { MissionDef, MissionRunState, SideQuestDef } from '../meta/types';
+import type { MissionDef, MissionRunState } from '../meta/types';
 import type { SideQuestProgress } from '../meta/runTracker';
 
 interface Props {
@@ -66,5 +66,4 @@ export function ObjectiveTracker({ mission, missionDef, sideQuests }: Props) {
       )}
     </div>
   );
-  void SideQuestDef; // type-only side-effect
 }

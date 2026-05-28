@@ -5,6 +5,8 @@ interface Props {
   progress: number;
   /** True once the engine + sprites are ready; triggers fade-out. */
   ready: boolean;
+  /** True if the engine failed to load — shows error message instead of infinite wait. */
+  error?: boolean;
   /** Called after the fade-out finishes so the parent can unmount us. */
   onDone: () => void;
 }
@@ -19,7 +21,7 @@ interface Props {
  *   - Press Start 2P with `font-smooth: none` everywhere.
  *   - The ship is an inline SVG with `shape-rendering="crispEdges"`.
  */
-export function LoadingScreen({ progress, ready, onDone }: Props) {
+export function LoadingScreen({ progress, ready, error, onDone }: Props) {
   const [leaving, setLeaving] = useState(false);
   const [dots, setDots] = useState('');
 
@@ -58,10 +60,12 @@ export function LoadingScreen({ progress, ready, onDone }: Props) {
           />
         </div>
         <div className="loading__text">
-          {ready ? 'READY' : 'LOADING'}
-          {!ready && <span className="loading__text__dots">{dots}</span>}
+          {error ? 'ERROR' : ready ? 'READY' : 'LOADING'}
+          {!ready && !error && <span className="loading__text__dots">{dots}</span>}
         </div>
-        <div className="loading__hint">INSERT COIN TO PLAY</div>
+        <div className="loading__hint">
+          {error ? 'FAILED TO LOAD ENGINE — TRY REFRESHING' : 'INSERT COIN TO PLAY'}
+        </div>
       </div>
     </div>
   );

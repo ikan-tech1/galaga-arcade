@@ -479,6 +479,7 @@ export function App() {
           <LoadingScreen
             progress={bootProgress}
             ready={game.ready}
+            error={game.loadError}
             onDone={() => setBootGone(true)}
           />
         )}

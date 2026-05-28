@@ -210,7 +210,26 @@ export type EasterEggId =
   | 'namcoFormation'
   | 'secretShipUnlock'
   | 'rainbowMode'
-  | 'retroDebug';
+  | 'retroDebug'
+  | 'pause30'
+  | 'doubleTapLogo'
+  | 'noFireStage1'
+  | 'thirteenStage'
+  | 'devChord';
+
+/** Ship skin id — palette swap unlocks tied to achievements. */
+export type ShipSkinId =
+  | 'default'
+  | 'crimson'
+  | 'azure'
+  | 'gold'
+  | 'jade'
+  | 'inferno'
+  | 'voidstorm'
+  | 'phaze'
+  | 'solar'
+  | 'platinum'
+  | 'rainbow';
 
 export interface EasterEggDef {
   id: EasterEggId;
@@ -219,6 +238,25 @@ export interface EasterEggDef {
   hint: string;
   /** Reward in credits. */
   reward: number;
+}
+
+export interface ModeRecord {
+  /** Best score this player has put up in this mode. */
+  bestScore: number;
+  /** Highest stage reached in this mode. */
+  bestStage: number;
+  /** Total runs played. */
+  runs: number;
+  /** Last run timestamp. */
+  lastPlayed: number;
+}
+
+export interface LeaderboardEntry {
+  initials: string;
+  score: number;
+  stage: number;
+  date: number;
+  ship: ShipId;
 }
 
 export interface MetaProgression {
@@ -244,6 +282,28 @@ export interface MetaProgression {
   daily: DailyStreak;
   /** Side quests completed inside Arcade+ runs (lifetime). */
   sideQuestsCompleted: number;
+  /** Achievements earned (id list). */
+  achievements: string[];
+  /** Selected ship skin id (defaults to 'default'). */
+  selectedSkin: ShipSkinId;
+  /** Skins unlocked through achievements (always includes 'default'). */
+  unlockedSkins: ShipSkinId[];
+  /** Per-mode local leaderboards (top 10). */
+  leaderboards: Record<GameMode, LeaderboardEntry[]>;
+  /** Per-mode aggregate records. */
+  modeRecords: Record<GameMode, ModeRecord>;
+  /** Lifetime kills (any mode). */
+  lifetimeKills: number;
+  /** Lifetime elite-boss kills. */
+  eliteBossKills: number;
+  /** Lifetime cosmic storms survived. */
+  hazardsSurvived: number;
+  /** Whether the user opts into haptic vibration. */
+  hapticsEnabled?: boolean;
+  /** Whether screen shake is enabled. */
+  screenShakeEnabled?: boolean;
+  /** Whether the training overlay (dive paths) is enabled. */
+  trainingHints?: boolean;
 }
 
 export interface RunContext {

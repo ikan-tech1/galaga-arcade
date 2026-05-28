@@ -8,7 +8,9 @@ let pending: Promise<typeof Game> | null = null;
 export async function loadGame(): Promise<typeof Game> {
   if (!pending) {
     pending = (async () => {
-      await init(wasmUrl);
+      // wasm-pack ≥0.13 expects an object argument; pass URL string as the
+      // module_or_path property to avoid the deprecation warning.
+      await (init as Function)({ module_or_path: wasmUrl });
       return Game;
     })();
   }

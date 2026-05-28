@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  addEliteKills,
+  addHazardsSurvived,
+  addLeaderboardEntry,
+  addLifetimeKills,
   awardCredits,
+  bumpModeRecord,
   bumpSideQuest,
   bumpUpgrade,
   discoverEgg,
@@ -8,18 +13,25 @@ import {
   recordMissionResult,
   saveMeta,
   selectShip,
+  selectSkin,
+  setSetting,
   spendCredits,
+  unlockAchievement,
   unlockShip,
   updateEndlessBest,
 } from '../meta/progression';
 import type {
   EasterEggId,
+  GameMode,
+  LeaderboardEntry,
   MetaProgression,
   ShipId,
+  ShipSkinId,
   UpgradeDef,
   UpgradeId,
 } from '../meta/types';
 import { UPGRADES, upgradeCost } from '../meta/upgrades';
+import { ACHIEVEMENT_BY_ID } from '../meta/achievements';
 
 export function useMeta() {
   const [meta, setMeta] = useState<MetaProgression>(() => loadMeta());
@@ -50,6 +62,11 @@ export function useMeta() {
 
   const pickShip = useCallback(
     (ship: ShipId) => setMeta((m) => selectShip(m, ship)),
+    [],
+  );
+
+  const pickSkin = useCallback(
+    (skin: ShipSkinId) => setMeta((m) => selectSkin(m, skin)),
     [],
   );
 
@@ -111,6 +128,51 @@ export function useMeta() {
     [],
   );
 
+  const earnAchievement = useCallback((id: string): boolean => {
+    let earned = false;
+    setMeta((prev) => {
+      if (prev.achievements.includes(id)) return prev;
+      const def = ACHIEVEMENT_BY_ID[id];
+      if (!def) return prev;
+      earned = true;
+      return unlockAchievement(prev, id, def.reward, def.unlockSkin);
+    });
+    return earned;
+  }, []);
+
+  const recordRunResult = useCallback(
+    (mode: GameMode, score: number, stage: number) =>
+      setMeta((m) => bumpModeRecord(m, mode, score, stage)),
+    [],
+  );
+
+  const submitLeaderboard = useCallback(
+    (mode: GameMode, entry: LeaderboardEntry) =>
+      setMeta((m) => addLeaderboardEntry(m, mode, entry)),
+    [],
+  );
+
+  const incLifetimeKills = useCallback(
+    (n: number) => setMeta((m) => addLifetimeKills(m, n)),
+    [],
+  );
+
+  const incEliteKills = useCallback(
+    (n: number) => setMeta((m) => addEliteKills(m, n)),
+    [],
+  );
+
+  const incHazardsSurvived = useCallback(
+    (n: number) => setMeta((m) => addHazardsSurvived(m, n)),
+    [],
+  );
+
+  const updateSetting = useCallback(
+    <K extends keyof MetaProgression>(key: K, value: MetaProgression[K]) =>
+      setMeta((m) => setSetting(m, key, value)),
+    [],
+  );
+
   const reset = useCallback(() => {
     setMeta(loadMeta());
   }, []);
@@ -120,12 +182,20 @@ export function useMeta() {
     grantCredits,
     tryPurchaseUpgrade,
     pickShip,
+    pickSkin,
     unlock,
     markEggDiscovered,
     finishMission,
     updateEndless,
     recordSideQuest,
     recordDailyComplete,
+    earnAchievement,
+    recordRunResult,
+    submitLeaderboard,
+    incLifetimeKills,
+    incEliteKills,
+    incHazardsSurvived,
+    updateSetting,
     reset,
   };
 }
